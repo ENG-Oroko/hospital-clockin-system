@@ -11,3 +11,5 @@ build
 *.log
 .docker-data
 apps/edge-gateway-service/bin/
+package-lock.json
+package.json
