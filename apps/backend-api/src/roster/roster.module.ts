@@ -7,6 +7,7 @@ import { RosterService } from './roster.service';
 @Module({
   imports: [DatabaseModule],
   controllers: [RosterController],
-  providers: [RosterRepository, RosterService]
+  providers: [RosterRepository, RosterService],
+  exports: [RosterService],
 })
 export class RosterModule {}

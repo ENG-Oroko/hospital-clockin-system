@@ -11,21 +11,27 @@ export class RefreshToken {
 
   async execute(dto: any) {
     const { refreshToken } = dto;
+    const payload = this.tokenService.verifyRefreshToken(refreshToken);
 
-    const session = await this.prisma.session.findFirst({
+    if (payload.tokenType !== 'refresh' || !payload.sub) {
+      throw new UnauthorizedException("Invalid refresh token");
+    }
+
+    const user = await this.prisma.user.findFirst({
       where: {
-        refreshToken,
-        isValid: true,
+        id: payload.sub,
+        tenantId: payload.tenantId,
+        deletedAt: null,
+        isActive: true,
       },
-      include: { user: true },
     });
 
-    if (!session) {
+    if (!user) {
       throw new UnauthorizedException("Invalid refresh token");
     }
 
     const accessToken =
-      this.tokenService.generateAccessToken(session.user);
+      this.tokenService.generateAccessToken(user);
 
     return {
       accessToken,

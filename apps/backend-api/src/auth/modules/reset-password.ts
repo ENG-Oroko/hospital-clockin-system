@@ -11,7 +11,7 @@ export class ResetPassword {
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
 
-    await this.prisma.user.update({
+    await this.prisma.user.updateMany({
       where: { email },
       data: { passwordHash },
     });

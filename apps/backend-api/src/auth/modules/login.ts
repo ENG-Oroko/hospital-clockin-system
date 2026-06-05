@@ -39,16 +39,6 @@ export class Login {
     const accessToken = this.tokenService.generateAccessToken(user);
     const refreshToken = this.tokenService.generateRefreshToken(user);
 
-    await this.prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken,
-        ipAddress: req?.ip,
-        userAgent: req?.headers?.["user-agent"],
-        expiresAt: this.tokenService.refreshExpiry(),
-      },
-    });
-
     return {
       accessToken,
       refreshToken,

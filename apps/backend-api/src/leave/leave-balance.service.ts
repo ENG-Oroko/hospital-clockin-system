@@ -6,7 +6,7 @@ export class LeaveBalanceService {
   constructor(private readonly db: DatabaseService) {}
 
   async getBalance(tenantId: string, userId: string, year: number) {
-    return this.db.leaveBalance.findFirst({
+    return this.leaveBalance.findFirst({
       where: { tenantId, userId, year },
     });
   }
@@ -17,7 +17,7 @@ export class LeaveBalanceService {
     year: number,
     totalDays: number,
   ) {
-    return this.db.leaveBalance.create({
+    return this.leaveBalance.create({
       data: {
         tenantId,
         userId,
@@ -45,7 +45,7 @@ export class LeaveBalanceService {
       throw new Error('Insufficient leave balance');
     }
 
-    return this.db.leaveBalance.update({
+    return this.leaveBalance.update({
       where: { id: balance.id },
       data: {
         usedDays: balance.usedDays + days,
@@ -66,7 +66,7 @@ export class LeaveBalanceService {
       throw new NotFoundException('Leave balance not found');
     }
 
-    return this.db.leaveBalance.update({
+    return this.leaveBalance.update({
       where: { id: balance.id },
       data: {
         totalDays: balance.totalDays + days,
@@ -87,7 +87,7 @@ export class LeaveBalanceService {
       throw new NotFoundException('Leave balance not found');
     }
 
-    return this.db.leaveBalance.update({
+    return this.leaveBalance.update({
       where: { id: balance.id },
       data: {
         totalDays,
@@ -95,5 +95,9 @@ export class LeaveBalanceService {
         remainingDays: totalDays,
       },
     });
+  }
+
+  private get leaveBalance() {
+    return (this.db as any).leaveBalance;
   }
 }

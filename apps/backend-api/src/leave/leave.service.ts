@@ -112,7 +112,6 @@ export class LeaveService {
       data: {
         status: dto.status,
         approvedById: dto.reviewedBy,
-        reviewNote: dto.reviewNote,
       },
     });
 

@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { AttendanceService } from '../attendance.service';
 
 @Injectable()
@@ -8,7 +7,6 @@ export class AttendancePollJob {
 
   constructor(private attendanceService: AttendanceService) {}
 
-  @Cron(CronExpression.EVERY_30_MINUTES)
   async pollPendingAttendances() {
     this.logger.debug('Polling pending attendances...');
     
@@ -25,7 +23,6 @@ export class AttendancePollJob {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_10PM)
   async markAbsentees() {
     this.logger.debug('Marking absent employees...');
     
@@ -38,7 +35,6 @@ export class AttendancePollJob {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async resetDailyCounters() {
     this.logger.debug('Resetting daily attendance counters...');
     

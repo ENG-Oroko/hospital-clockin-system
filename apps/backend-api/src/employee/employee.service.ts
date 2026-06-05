@@ -117,6 +117,82 @@ export class EmployeeService {
     return this.toResponse(employee);
   }
 
+  async getEmployeeById(tenantId: string, id: string) {
+    assertUuid(id, 'id');
+    return this.toResponse(await this.employeeRepository.findByIdOrThrow(tenantId, id));
+  }
+
+  async resolveEmployeeByDevicePin(tenantId: string, devicePin: string) {
+    const normalizedDevicePin = assertRequiredString(devicePin, 'devicePin', 50);
+    return this.toResponse(await this.employeeRepository.findByDevicePinOrThrow(tenantId, normalizedDevicePin));
+  }
+
+  async assertEmployeeEligible(tenantId: string, employeeId: string) {
+    assertUuid(employeeId, 'employeeId');
+    const employee = await this.employeeRepository.findByIdOrThrow(tenantId, employeeId);
+
+    if (!employee.isActive || employee.deletedAt || ['TERMINATED', 'SUSPENDED'].includes(employee.employmentStatus)) {
+      throw new BadRequestException('Employee is not eligible for this workflow.');
+    }
+
+    return this.toResponse(employee);
+  }
+
+  async getPayrollProfile(tenantId: string, employeeId: string) {
+    const employee = await this.assertEmployeeEligible(tenantId, employeeId);
+
+    return {
+      id: employee.id,
+      tenantId: employee.tenantId,
+      payrollNumber: employee.employeeCode,
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      hourlyRate: employee.hourlyRate,
+      departmentId: employee.departmentId,
+      department: employee.department,
+      employmentStatus: employee.employmentStatus,
+      isActive: employee.isActive,
+    };
+  }
+
+  async getPayrollProfiles(tenantId: string) {
+    const employees = await this.employeeRepository.listPayrollProfiles(tenantId);
+
+    return employees.map((employee) => ({
+      id: employee.id,
+      tenantId: employee.tenantId,
+      payrollNumber: employee.payrollNumber,
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      hourlyRate: Number(employee.hourlyRate),
+      departmentId: employee.departmentId,
+      department: employee.department,
+      employmentStatus: employee.employmentStatus,
+      isActive: employee.isActive,
+    }));
+  }
+
+  async getDepartmentEmployees(tenantId: string, departmentId: string) {
+    assertUuid(departmentId, 'departmentId');
+    await this.employeeRepository.assertDepartmentBelongsToTenant(tenantId, departmentId);
+    const employees = await this.employeeRepository.listByDepartment(tenantId, departmentId);
+    return employees.map((employee) => this.toResponse(employee));
+  }
+
+  async getEmployeeLifecycleState(tenantId: string, employeeId: string) {
+    assertUuid(employeeId, 'employeeId');
+    const employee = await this.employeeRepository.findByIdOrThrow(tenantId, employeeId, true);
+
+    return {
+      id: employee.id,
+      tenantId: employee.tenantId,
+      isActive: employee.isActive,
+      employmentStatus: employee.employmentStatus,
+      deletedAt: employee.deletedAt,
+      departmentId: employee.departmentId,
+    };
+  }
+
   async update(tenantId: string, actor: AuthenticatedUser, id: string, payload: EmployeeUpdateDTO) {
     assertUuid(id, 'id');
     const existing = await this.employeeRepository.findByIdOrThrow(tenantId, id);

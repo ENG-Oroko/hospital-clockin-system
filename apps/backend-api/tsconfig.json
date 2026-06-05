@@ -21,8 +21,7 @@
     // Testing Framework (Jest) Compatibility
     "isolatedModules": true,
     "types": [
-      "node",
-      "jest"
+      "node"
     ],
     
     // Internal Path Mapping

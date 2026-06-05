@@ -12,6 +12,20 @@ export interface EmployeeListFilters {
   take: number;
 }
 
+export interface EmployeePayrollProfile {
+  id: string;
+  tenantId: string;
+  payrollNumber: string;
+  firstName: string;
+  lastName: string;
+  hourlyRate: unknown;
+  departmentId: string | null;
+  employmentStatus: string;
+  isActive: boolean;
+  deletedAt: Date | null;
+  department: { id: string; name: string; code: string } | null;
+}
+
 @Injectable()
 export class EmployeeRepository {
   constructor(private readonly database: PrismaService) {}
@@ -69,6 +83,47 @@ export class EmployeeRepository {
     }
 
     return employee;
+  }
+
+  async findByDevicePinOrThrow(tenantId: string, devicePin: string) {
+    const employee = await this.database.client.user.findFirst({
+      where: { tenantId, devicePin, deletedAt: null },
+      select: this.employeeSelect(),
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee device mapping was not found for this tenant.');
+    }
+
+    return employee;
+  }
+
+  async listByDepartment(tenantId: string, departmentId: string) {
+    return this.database.client.user.findMany({
+      where: { tenantId, departmentId, deletedAt: null },
+      select: this.employeeSelect(),
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
+  }
+
+  async listPayrollProfiles(tenantId: string): Promise<EmployeePayrollProfile[]> {
+    return this.database.client.user.findMany({
+      where: { tenantId, isActive: true, deletedAt: null, employmentStatus: 'ACTIVE' },
+      select: {
+        id: true,
+        tenantId: true,
+        payrollNumber: true,
+        firstName: true,
+        lastName: true,
+        hourlyRate: true,
+        departmentId: true,
+        employmentStatus: true,
+        isActive: true,
+        deletedAt: true,
+        department: { select: { id: true, name: true, code: true } },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
   }
 
   async assertDepartmentBelongsToTenant(tenantId: string, departmentId: string): Promise<void> {

@@ -80,55 +80,31 @@ export class AttendanceSyncService {
     this.logger.log('Starting sync with HR system...');
     
     try {
-      // Get attendance summaries that need to be synced to HR system
-      const summaries = await this.db.attendanceSummary.findMany({
-        where: {
-          // Add condition for HR sync status if you have that field
-          // syncedToHr: false
-        },
+      const logs = await this.db.attendanceLog.findMany({
         include: {
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-              payrollNumber: true,
-            },
-          },
+          user: { select: { firstName: true, lastName: true, email: true, payrollNumber: true } },
         },
-        take: 100, // Limit batch size
+        orderBy: { timestamp: 'desc' },
+        take: 100,
       });
 
       const records: any[] = [];
       const errors: string[] = [];
       let synced = 0;
 
-      for (const summary of summaries) {
+      for (const log of logs) {
         try {
-          // Transform data for HR system
           const hrRecord = {
-            employeeId: summary.user.payrollNumber,
-            date: summary.date,
-            status: summary.status,
-            totalHours: summary.totalHours,
-            lateMinutes: summary.lateMinutes,
-            overtimeHours: summary.overtimeHours,
+            employeeId: log.user.payrollNumber,
+            timestamp: log.timestamp,
+            direction: log.direction,
           };
-          
-          // Here you would call your HR system API
-          // await this.sendToHRSystem(hrRecord);
-          
+
           records.push(hrRecord);
           synced++;
-          
-          // Update sync status if you have the field
-          // await this.db.attendanceSummary.update({
-          //   where: { id: summary.id },
-          //   data: { syncedToHr: true, syncedToHrAt: new Date() }
-          // });
         } catch (error) {
-          errors.push(`Summary ${summary.id}: ${error.message}`);
-          this.logger.error(`Failed to sync summary ${summary.id}: ${error.message}`);
+          errors.push(`Attendance log ${log.id}: ${error.message}`);
+          this.logger.error(`Failed to sync attendance log ${log.id}: ${error.message}`);
         }
       }
 

@@ -60,6 +60,69 @@ export class RosterRepository {
     return this.database.client.shiftTemplate.update({ where: { id }, data });
   }
 
+  async findActiveAssignmentForUserDate(tenantId: string, userId: string, date: Date) {
+    return this.database.client.rosterAssignment.findFirst({
+      where: {
+        tenantId,
+        userId,
+        date,
+        supersededAt: null,
+        status: { not: 'CANCELLED' },
+      },
+      include: {
+        department: { select: { id: true, name: true, code: true, rules: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findAssignmentSnapshotOrThrow(tenantId: string, assignmentId: string) {
+    const assignment = await this.database.client.rosterAssignment.findFirst({
+      where: { id: assignmentId, tenantId },
+      include: {
+        department: { select: { id: true, name: true, code: true, rules: true } },
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Roster assignment was not found for this tenant.');
+    }
+
+    return assignment;
+  }
+
+  async getAssignmentHistory(tenantId: string, assignmentId: string) {
+    return this.database.client.rosterAssignmentHistory.findMany({
+      where: { tenantId, rosterAssignmentId: assignmentId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async getDepartmentRoster(tenantId: string, departmentId: string, date: Date) {
+    return this.database.client.rosterAssignment.findMany({
+      where: {
+        tenantId,
+        departmentId,
+        date,
+        supersededAt: null,
+        status: { not: 'CANCELLED' },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            payrollNumber: true,
+            departmentId: true,
+          },
+        },
+        department: { select: { id: true, name: true, code: true, rules: true } },
+      },
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
   async assertEmployeesBelongToTenant(tenantId: string, employeeIds: string[]) {
     const employees = await this.database.client.user.findMany({
       where: { tenantId, id: { in: employeeIds }, deletedAt: null },

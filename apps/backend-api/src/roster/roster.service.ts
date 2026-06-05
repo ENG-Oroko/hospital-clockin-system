@@ -218,6 +218,36 @@ export class RosterService {
     return assignments.map((assignment) => this.toRosterAssignmentResponse(assignment));
   }
 
+  async getActiveAssignmentForUserDate(tenantId: string, userId: string, date: Date | string) {
+    assertUuid(userId, 'userId');
+    const normalizedDate = typeof date === 'string' ? assertDate(date, 'date') : this.normalizeDateOnly(date);
+    const assignment = await this.rosterRepository.findActiveAssignmentForUserDate(tenantId, userId, normalizedDate);
+    return assignment ? this.toRosterAssignmentSnapshot(assignment) : null;
+  }
+
+  async getAssignmentSnapshot(tenantId: string, assignmentId: string) {
+    assertUuid(assignmentId, 'assignmentId');
+    return this.toRosterAssignmentSnapshot(
+      await this.rosterRepository.findAssignmentSnapshotOrThrow(tenantId, assignmentId),
+    );
+  }
+
+  async getCurrentAssignment(tenantId: string, userId: string, date: Date | string = new Date()) {
+    return this.getActiveAssignmentForUserDate(tenantId, userId, date);
+  }
+
+  async getAssignmentHistory(tenantId: string, assignmentId: string) {
+    assertUuid(assignmentId, 'assignmentId');
+    return this.rosterRepository.getAssignmentHistory(tenantId, assignmentId);
+  }
+
+  async getDepartmentRoster(tenantId: string, departmentId: string, date: Date | string) {
+    assertUuid(departmentId, 'departmentId');
+    const normalizedDate = typeof date === 'string' ? assertDate(date, 'date') : this.normalizeDateOnly(date);
+    const assignments = await this.rosterRepository.getDepartmentRoster(tenantId, departmentId, normalizedDate);
+    return assignments.map((assignment) => this.toRosterAssignmentSnapshot(assignment));
+  }
+
   private expandDateRange(start: Date, end: Date): Date[] {
     const dates: Date[] = [];
     const cursor = new Date(start);
@@ -233,6 +263,10 @@ export class RosterService {
     }
 
     return dates;
+  }
+
+  private normalizeDateOnly(date: Date): Date {
+    return new Date(date.toISOString().slice(0, 10));
   }
 
   private crossesMidnight(startTime: string, endTime: string): boolean {
@@ -310,6 +344,33 @@ export class RosterService {
       unassignedReason: assignment.unassignedReason,
       createdAt: assignment.createdAt.toISOString(),
       updatedAt: assignment.updatedAt.toISOString(),
+    };
+  }
+
+  private toRosterAssignmentSnapshot(assignment: any) {
+    return {
+      id: assignment.id,
+      tenantId: assignment.tenantId,
+      employeeId: assignment.userId,
+      departmentId: assignment.departmentId,
+      shiftTemplateId: assignment.shiftTemplateId,
+      date: assignment.date,
+      status: assignment.status,
+      overriddenHourlyRate: assignment.overriddenHourlyRate === null ? null : Number(assignment.overriddenHourlyRate),
+      startTimeSnapshot: assignment.startTimeSnapshot,
+      endTimeSnapshot: assignment.endTimeSnapshot,
+      gracePeriodSnapshot: assignment.gracePeriodSnapshot,
+      overtimeThresholdSnapshot: assignment.overtimeThresholdSnapshot,
+      overnightSnapshot: assignment.overnightSnapshot,
+      effectiveFrom: assignment.effectiveFrom,
+      effectiveTo: assignment.effectiveTo,
+      assignedByUserId: assignment.assignedByUserId,
+      unassignedAt: assignment.unassignedAt,
+      unassignedReason: assignment.unassignedReason,
+      department: assignment.department ?? null,
+      employee: assignment.user ?? null,
+      createdAt: assignment.createdAt,
+      updatedAt: assignment.updatedAt,
     };
   }
 }
