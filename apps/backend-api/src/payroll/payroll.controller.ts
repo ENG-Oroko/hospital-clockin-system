@@ -1,65 +1,76 @@
-import { Controller, Post, Get, Param, Body, Query } from '@nestjs/common';
-import { PayrollService } from './payroll.service';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  Body,
+  Patch,
+} from '@nestjs/common';
+import {
+  PayrollService,
+  CreatePeriodDTO,
+  RunPayrollDTO,
+  ApprovePayslipDTO,
+} from './payroll.service';
 
 @Controller('payroll')
 export class PayrollController {
   constructor(private readonly payrollService: PayrollService) {}
-
-  @Post('periods')
-  createPeriod(
-    @Body() body: { tenantId: string; name: string; startDate: string; endDate: string },
-  ) {
-    return this.payrollService.createPeriod(
-      body.tenantId,
-      body.name,
-      body.startDate,
-      body.endDate,
-    );
-  }
 
   @Get('periods')
   getPeriods(@Query('tenantId') tenantId: string) {
     return this.payrollService.getPeriods(tenantId);
   }
 
-  @Post('periods/:periodId/run')
-  runPayroll(
-    @Param('periodId') periodId: string,
-    @Body() body: { tenantId: string },
-  ) {
-    return this.payrollService.runPayroll(periodId, body.tenantId);
+  @Post('periods')
+  createPeriod(@Body() dto: CreatePeriodDTO) {
+    return this.payrollService.createPeriod(dto);
   }
 
-  @Get('periods/:periodId/payslips')
+  @Post('periods/:id/run')
+  runPayroll(@Param('id') periodId: string, @Body() dto: RunPayrollDTO) {
+    return this.payrollService.runPayroll(periodId, dto);
+  }
+
+  @Get('periods/:id/payslips')
   getPayslipsByPeriod(
-    @Param('periodId') periodId: string,
+    @Param('id') periodId: string,
     @Query('tenantId') tenantId: string,
   ) {
     return this.payrollService.getPayslipsByPeriod(periodId, tenantId);
   }
 
-  @Get('payslip/:periodId/employee/:employeeId')
-  getEmployeePayslip(
-    @Param('periodId') periodId: string,
-    @Param('employeeId') employeeId: string,
-    @Query('tenantId') tenantId: string,
-  ) {
-    return this.payrollService.getEmployeePayslip(employeeId, periodId, tenantId);
-  }
-
-  @Post('payslip/:payslipId/approve')
-  approvePayslip(
-    @Param('payslipId') payslipId: string,
-    @Body() body: { tenantId: string },
-  ) {
-    return this.payrollService.approvePayslip(payslipId, body.tenantId);
-  }
-
-  @Get('periods/:periodId/export')
+  @Get('periods/:id/export')
   exportPayroll(
-    @Param('periodId') periodId: string,
+    @Param('id') periodId: string,
     @Query('tenantId') tenantId: string,
   ) {
     return this.payrollService.exportPayroll(periodId, tenantId);
+  }
+
+  @Get('payslip/:pid/employee/:eid')
+  getEmployeePayslip(
+    @Param('pid') periodId: string,
+    @Param('eid') employeeId: string,
+    @Query('tenantId') tenantId: string,
+  ) {
+    return this.payrollService.getEmployeePayslip(periodId, employeeId, tenantId);
+  }
+
+  @Patch('payslip/:id/approve')
+  approvePayslip(
+    @Param('id') payslipId: string,
+    @Body() dto: ApprovePayslipDTO,
+  ) {
+    return this.payrollService.approvePayslip(payslipId, dto);
+  }
+
+  @Patch('payslip/:id/paid')
+  markPaid(
+    @Param('id') payslipId: string,
+    @Query('tenantId') tenantId: string,
+  ) {
+    return this.payrollService.markPaid(payslipId, tenantId);
   }
 }

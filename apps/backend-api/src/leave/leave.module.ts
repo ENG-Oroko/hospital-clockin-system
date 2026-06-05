@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
+
+import { LeaveController } from './leave.controller';
 import { LeaveService } from './leave.service';
-import { LeaveController } from './leave.controller'; // If it exists
+import { LeaveBalanceService } from './leave-balance.service';
+import { DatabaseModule } from '../database/database.module';
 
 @Module({
+  imports: [DatabaseModule],
   controllers: [LeaveController],
-  providers: [LeaveService],
-  exports: [LeaveService], // THIS IS CRITICAL - must be here
+  providers: [LeaveService, LeaveBalanceService],
+  exports: [LeaveService, LeaveBalanceService],
 })
 export class LeaveModule {}
