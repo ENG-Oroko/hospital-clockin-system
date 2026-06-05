@@ -21,7 +21,10 @@ export class RosterRepository {
       ...(filters.search ? { name: { contains: filters.search, mode: 'insensitive' } } : {}),
     };
 
-    const [items, total] = await this.database.client.$transaction([
+    const [items, total] = await this.database.client.$transaction<[
+      Awaited<ReturnType<typeof this.database.client.shiftTemplate.findMany>>,
+      number,
+    ]>([
       this.database.client.shiftTemplate.findMany({
         where,
         select: this.shiftTemplateSelect(),
@@ -81,7 +84,7 @@ export class RosterRepository {
     }
   }
 
-  async assignEmployees(tenantId: string, shiftTemplate: any, rows: any[]) {
+  async assignEmployees(tenantId: string, shiftTemplate: any, rows: any[]): Promise<any[]> {
     try {
       return await this.database.client.$transaction(async (tx) => {
       const results = [];
@@ -169,7 +172,7 @@ export class RosterRepository {
     }
   }
 
-  async unassignEmployees(tenantId: string, shiftTemplateId: string, rows: any[]) {
+  async unassignEmployees(tenantId: string, shiftTemplateId: string, rows: any[]): Promise<any[]> {
     try {
       return await this.database.client.$transaction(async (tx) => {
       const results = [];

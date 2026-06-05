@@ -37,7 +37,10 @@ export class EmployeeRepository {
         : {}),
     };
 
-    const [items, total] = await this.database.client.$transaction([
+    const [items, total] = await this.database.client.$transaction<[
+      Awaited<ReturnType<typeof this.database.client.user.findMany>>,
+      number,
+    ]>([
       this.database.client.user.findMany({
         where,
         select: this.employeeSelect(),

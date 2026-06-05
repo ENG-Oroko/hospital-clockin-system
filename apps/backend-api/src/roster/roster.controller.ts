@@ -1,13 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import {
+  UserRole,
+} from '@chronos/types-common';
+import type {
   ShiftAssignmentCreateDTO,
   ShiftAssignmentUnassignDTO,
   ShiftTemplateCreateDTO,
   ShiftTemplateQueryDTO,
   ShiftTemplateUpdateDTO,
-  UserRole,
 } from '@chronos/types-common';
-import { AuthenticatedUser } from '../common/auth/authenticated-user';
+import type { AuthenticatedUser } from '../common/auth/authenticated-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../common/auth/jwt-auth.guard';
 import { Roles } from '../common/auth/roles.decorator';

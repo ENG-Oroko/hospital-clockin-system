@@ -42,11 +42,7 @@ export class DepartmentService {
     dto: UpdateDepartmentDto,
     tenantId: string,
   ) {
-    const department = await this.getDepartmentOrThrow(departmentId);
-
-    if (department.tenantId !== tenantId) {
-      throw new BadRequestException('Unauthorized');
-    }
+    const department = await this.getDepartmentOrThrow(tenantId, departmentId);
 
     if (dto.code && dto.code !== department.code) {
       const existingDepartment = await this.prisma.client.department.findFirst({
@@ -78,11 +74,7 @@ export class DepartmentService {
 
   // DELETE
   async deleteDepartment(departmentId: string, tenantId: string) {
-    const department = await this.getDepartmentOrThrow(departmentId);
-
-    if (department.tenantId !== tenantId) {
-      throw new BadRequestException('Unauthorized');
-    }
+    await this.getDepartmentOrThrow(tenantId, departmentId);
 
     return this.prisma.client.department.delete({
       where: { id: departmentId },
@@ -90,11 +82,9 @@ export class DepartmentService {
   }
 
   // ASSIGN HEAD
-  async assignDepartmentHead(departmentId: string, userId: string) {
-    const department = await this.getDepartmentOrThrow(departmentId);
-    const user = await this.getUserOrThrow(userId);
-
-    this.assertTenantMatch(department.tenantId, user.tenantId);
+  async assignDepartmentHead(tenantId: string, departmentId: string, userId: string) {
+    await this.getDepartmentOrThrow(tenantId, departmentId);
+    await this.getUserOrThrow(tenantId, userId);
 
     return this.prisma.client.user.update({
       where: { id: userId },
@@ -106,11 +96,9 @@ export class DepartmentService {
   }
 
   // ASSIGN STAFF
-  async assignDepartmentStaff(departmentId: string, userId: string) {
-    const department = await this.getDepartmentOrThrow(departmentId);
-    const user = await this.getUserOrThrow(userId);
-
-    this.assertTenantMatch(department.tenantId, user.tenantId);
+  async assignDepartmentStaff(tenantId: string, departmentId: string, userId: string) {
+    await this.getDepartmentOrThrow(tenantId, departmentId);
+    await this.getUserOrThrow(tenantId, userId);
 
     return this.prisma.client.user.update({
       where: { id: userId },
@@ -122,30 +110,28 @@ export class DepartmentService {
   }
 
   // STAFF LIST
-  async listDepartmentStaff(departmentId: string) {
-    await this.getDepartmentOrThrow(departmentId);
+  async listDepartmentStaff(tenantId: string, departmentId: string) {
+    await this.getDepartmentOrThrow(tenantId, departmentId);
 
     return this.prisma.client.user.findMany({
-      where: { departmentId },
+      where: { tenantId, departmentId },
     });
   }
 
   // HELPERS
-  private async getDepartmentOrThrow(id: string) {
-    const dept = await this.prisma.client.department.findUnique({ where: { id } });
+  private async getDepartmentOrThrow(tenantId: string, id: string) {
+    const dept = await this.prisma.client.department.findFirst({
+      where: { id, tenantId },
+    });
     if (!dept) throw new NotFoundException('Department not found');
     return dept;
   }
 
-  private async getUserOrThrow(id: string) {
-    const user = await this.prisma.client.user.findUnique({ where: { id } });
+  private async getUserOrThrow(tenantId: string, id: string) {
+    const user = await this.prisma.client.user.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
     if (!user) throw new NotFoundException('User not found');
     return user;
-  }
-
-  private assertTenantMatch(a: string, b: string) {
-    if (a !== b) {
-      throw new BadRequestException('Tenant mismatch');
-    }
   }
 }

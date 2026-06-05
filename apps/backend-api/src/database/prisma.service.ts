@@ -89,11 +89,11 @@ export function instantiateSecureClient(baseClient: PrismaClient) {
   return baseClient.$extends({
     name: 'ChronosZeroTrustIsolationEngine',
     client: {
-      async $transaction<T>(this: any, args: any): Promise<T> {
+      async $transaction<T>(this: any, args: any, options?: any): Promise<T> {
         const tenantId = TenantStorage.getTenantId();
         
         if (!tenantId) {
-          const directResult = await baseClient.$transaction(args);
+          const directResult = await baseClient.$transaction(args, options);
           return directResult as unknown as T;
         }
 
@@ -104,7 +104,7 @@ export function instantiateSecureClient(baseClient: PrismaClient) {
             transactionPromise = baseClient.$transaction(async (tx) => {
               await tx.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true);`;
               return args(tx);
-            });
+            }, options);
           }, true);
           
           const interactiveResult = await transactionPromise!;
@@ -116,14 +116,14 @@ export function instantiateSecureClient(baseClient: PrismaClient) {
           
           TenantStorage.run(tenantId, () => {
             const setConfigPromise = baseClient.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true);`;
-            batchPromise = baseClient.$transaction([setConfigPromise, ...args]);
+            batchPromise = baseClient.$transaction([setConfigPromise, ...args], options);
           }, true);
 
           const resolvedBatch = await batchPromise!;
           return resolvedBatch.slice(1) as unknown as T;
         }
 
-        const fallbackResult = await baseClient.$transaction(args);
+        const fallbackResult = await baseClient.$transaction(args, options);
         return fallbackResult as unknown as T;
       }
     },
