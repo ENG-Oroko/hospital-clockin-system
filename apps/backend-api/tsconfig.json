@@ -1,50 +1,35 @@
 {
   "compilerOptions": {
+    "module": "node16",
+    "moduleResolution": "node16",
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
     "rootDir": "./",
     "outDir": "./dist",
-    "skipLibCheck": true,
-    
-    // NestJS & Dependency Injection Configuration
+    "declaration": true,
+    "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    
-    // Build Artifacts & Source Mapping
-    "declaration": true,
     "sourceMap": true,
     "incremental": true,
-    "removeComments": true,
+    "skipLibCheck": true,
     
-    // Testing Framework (Jest) Compatibility
-    "isolatedModules": true,
-    "types": [
-      "node",
-      "jest"
-    ],
+    "isolatedModules": false,  // ← CHANGE THIS TO false
     
-    // Internal Path Mapping
+    "types": ["node", "jest"],
     "paths": {
-      "src/*": ["./src/*"]
+      "src/*": ["./src/*"],
+      "@chronos/database": ["../../packages/database/src"],
+      "@chronos/database/*": ["../../packages/database/src/*"],
+      "@chronos/types-common": ["../../packages/types-common/src"],
+      "@chronos/types-common/*": ["../../packages/types-common/src/*"]
     },
-    
-    // Type Checking Laxity Constraints
     "strictNullChecks": false,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    
-    // Code Quality Rules
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": [
-    "src/**/*",
-    "test/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

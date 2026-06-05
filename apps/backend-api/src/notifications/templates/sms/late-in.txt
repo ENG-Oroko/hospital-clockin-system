@@ -1,0 +1,1 @@
+LATE CLOCK-IN: You were {{lateMinutes}} minutes late for your shift starting at {{shiftStart}}. Please justify this in the system. {{justifyUrl}}

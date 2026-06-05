@@ -1,58 +1,18 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-
-interface SalaryRules {
-  overtimeMultiplier: number;
-  holidayMultiplier?: number;
-}
-
-interface HolidayCalendar {
-  observedHolidays: { name: string; date: string }[];
-}
-
-interface DepartmentRules {
-  nightPremiumRate?: number;
-}
-
-export interface CreatePeriodDTO {
-  tenantId: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-}
-
-export interface RunPayrollDTO {
-  tenantId: string;
-}
-
-export interface ApprovePayslipDTO {
-  tenantId: string;
-}
 
 @Injectable()
 export class PayrollService {
   constructor(private readonly db: DatabaseService) {}
 
-  async createPeriod(dto: CreatePeriodDTO) {
-    const existing = await this.db.payrollPeriod.findFirst({
-      where: { tenantId: dto.tenantId, name: dto.name },
-    });
-    if (existing) {
-      throw new BadRequestException(
-        `A payroll period named "${dto.name}" already exists.`,
-      );
-    }
+  async createPeriod(tenantId: string, name: string, startDate: string, endDate: string) {
     return this.db.payrollPeriod.create({
       data: {
-        tenantId:  dto.tenantId,
-        name:      dto.name,
-        startDate: new Date(dto.startDate),
-        endDate:   new Date(dto.endDate),
-        status:    'OPEN',
+        tenantId,
+        name,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        status: 'OPEN',
       },
     });
   }
@@ -60,156 +20,116 @@ export class PayrollService {
   async getPeriods(tenantId: string) {
     return this.db.payrollPeriod.findMany({
       where: { tenantId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { startDate: 'desc' },
     });
   }
 
-  async runPayroll(periodId: string, dto: RunPayrollDTO) {
+  async runPayroll(periodId: string, tenantId: string) {
     const period = await this.db.payrollPeriod.findFirst({
-      where: { id: periodId, tenantId: dto.tenantId },
+      where: { id: periodId, tenantId },
     });
-    if (!period) {
-      throw new NotFoundException(`Payroll period ${periodId} not found.`);
-    }
-    if (period.status === 'FINALIZED') {
-      throw new BadRequestException(
-        `Period "${period.name}" is already FINALIZED.`,
-      );
-    }
+
+    if (!period) throw new NotFoundException('Payroll period not found');
+    if (period.status === 'FINALIZED')
+      throw new BadRequestException('This payroll period is already finalized');
 
     await this.db.payrollPeriod.update({
       where: { id: periodId },
       data: { status: 'PROCESSING' },
     });
 
-    const settings = await this.db.systemSetting.findUnique({
-      where: { tenantId: dto.tenantId },
+    const settings = await this.db.systemSetting.findFirst({
+      where: { tenantId },
     });
-    if (!settings) {
-      throw new NotFoundException(`SystemSetting not found for tenant.`);
-    }
 
-    const salaryRules      = settings.salaryRules as unknown as SalaryRules;
-    const holidayCalendar  = settings.holidayCalendar as unknown as HolidayCalendar;
-    const observedHolidayDates = new Set(
-      (holidayCalendar?.observedHolidays || []).map((h) => h.date),
-    );
+    if (!settings) throw new NotFoundException('System settings not found');
 
-    const overtimeMultiplier = salaryRules.overtimeMultiplier ?? 1.5;
-    const holidayMultiplier  = salaryRules.holidayMultiplier  ?? 2.0;
+    const salaryRules = settings.salaryRules as {
+      overtimeMultiplier: number;
+      nightShiftDifferential: number;
+    };
 
     const employees = await this.db.user.findMany({
-      where: { tenantId: dto.tenantId, isActive: true },
+      where: { tenantId, isActive: true },
     });
 
-    const payslips: object[] = [];
+    const payslips = [];
 
     for (const employee of employees) {
-      const reconLogs = await this.db.reconciliationLog.findMany({
+      const reconciliationLogs = await this.db.reconciliationLog.findMany({
         where: {
-          tenantId: dto.tenantId,
+          tenantId,
           isResolved: true,
           rosterAssignment: {
             userId: employee.id,
-            date: { gte: period.startDate, lte: period.endDate },
+            date: {
+              gte: period.startDate,
+              lte: period.endDate,
+            },
           },
         },
         include: {
           rosterAssignment: {
-            include: { department: true, shiftTemplate: true },
+            include: {
+              shiftTemplate: true,
+              department: true,
+            },
           },
         },
       });
 
-      // ── Accumulate hours ──────────────────────────────────────────
-      let regularHours  = 0;
-      let overtimeHours = 0;
-      let nightHours    = 0;
-      let holidayHours  = 0;
+      let totalBaseHours = 0;
+      let totalOvertimeHours = 0;
+      let totalNightHours = 0;
 
-      for (const log of reconLogs) {
-        const shiftDate = log.rosterAssignment.date.toISOString().split('T')[0];
-        const isHoliday = observedHolidayDates.has(shiftDate);
-
-        regularHours  += Number(log.calculatedBaseHours);
-        overtimeHours += Number(log.calculatedOvertime);
-        nightHours    += Number(log.calculatedNightShift);
-
-        if (isHoliday) {
-          holidayHours +=
-            Number(log.calculatedBaseHours) +
-            Number(log.calculatedOvertime) +
-            Number(log.calculatedNightShift);
-        }
+      for (const log of reconciliationLogs) {
+        totalBaseHours += Number(log.calculatedBaseHours);
+        totalOvertimeHours += Number(log.calculatedOvertime);
+        totalNightHours += Number(log.calculatedNightShift);
       }
 
-      // ── Resolve hourly rate ───────────────────────────────────────
-      let hourlyRate = Number(employee.hourlyRate);
-      if (reconLogs.length > 0) {
-        const last = reconLogs[reconLogs.length - 1].rosterAssignment;
-        if (last.overriddenHourlyRate !== null) {
-          hourlyRate = Number(last.overriddenHourlyRate);
-        }
-      }
+      const lastAssignment = reconciliationLogs[0]?.rosterAssignment;
+      const hourlyRate = lastAssignment?.overriddenHourlyRate
+        ? Number(lastAssignment.overriddenHourlyRate)
+        : Number(employee.hourlyRate);
 
-      // ── Resolve night premium from department rules ───────────────
-      let nightPremiumRate = 0;
-      if (reconLogs.length > 0) {
-        const dept     = reconLogs[reconLogs.length - 1].rosterAssignment.department;
-        const rules    = dept.rules as unknown as DepartmentRules;
-        nightPremiumRate = rules?.nightPremiumRate ?? 0;
-      }
+      const deptRules = lastAssignment?.department?.rules as
+        | { nightPremiumRate?: number }
+        | null;
+      const nightPremiumRate = deptRules?.nightPremiumRate ?? 0;
 
-      // ── Compute wage components (hours × rates only) ──────────────
-      const regularPay  = regularHours  * hourlyRate;
-      const overtimePay = overtimeHours * hourlyRate * overtimeMultiplier;
-      const nightPay    = nightHours    * hourlyRate * (1 + nightPremiumRate);
-      const holidayPay  = holidayHours  * hourlyRate * holidayMultiplier;
-      const totalGross  = regularPay + overtimePay + nightPay + holidayPay;
+      const baseSalary = totalBaseHours * hourlyRate;
+      const overtimePay = totalOvertimeHours * hourlyRate * salaryRules.overtimeMultiplier;
+      const nightPay = totalNightHours * hourlyRate * (1 + nightPremiumRate);
+      const allowances = 0;
+      const totalGross = baseSalary + overtimePay + nightPay + allowances;
 
-      // ── Delete any existing draft for idempotency ─────────────────
       await this.db.payslip.deleteMany({
-        where: { tenantId: dto.tenantId, periodId, employeeId: employee.id },
+        where: { periodId, employeeId: employee.id },
       });
 
-      // ── Save ledger record ────────────────────────────────────────
       const payslip = await this.db.payslip.create({
         data: {
-          tenantId:            dto.tenantId,
+          tenantId,
           periodId,
-          employeeId:          employee.id,
+          employeeId: employee.id,
           hourlyRate,
-          regularHoursWorked:  regularHours,
-          overtimeHoursWorked: overtimeHours,
-          nightHoursWorked:    nightHours,
-          baseSalary:          regularPay,
+          regularHoursWorked: totalBaseHours,
+          overtimeHoursWorked: totalOvertimeHours,
+          nightHoursWorked: totalNightHours,
+          baseSalary,
           overtimePay,
-          allowances:          0,
+          allowances,
           totalGross,
-          totalDeductions:     0,
-          netPay:              totalGross,
+          totalDeductions: 0,
+          netPay: 0,
           deductionsBreakdown: {},
           allowancesBreakdown: {},
-          status:              'UNPAID',
+          status: 'UNPAID',
         },
       });
 
-      payslips.push({
-        employeeName:  `${employee.firstName} ${employee.lastName}`,
-        payrollNumber: employee.payrollNumber,
-        hourlyRate,
-        regularHours,
-        overtimeHours,
-        nightHours,
-        holidayHours,
-        regularPay,
-        overtimePay,
-        nightPay,
-        holidayPay,
-        totalGross,
-        payslipId: payslip.id,
-        status:    'UNPAID',
-      });
+      payslips.push(payslip);
     }
 
     await this.db.payrollPeriod.update({
@@ -218,10 +138,9 @@ export class PayrollService {
     });
 
     return {
-      message:                 'Payroll run completed successfully',
+      message: 'Payroll run completed successfully',
       periodId,
-      periodName:              period.name,
-      totalEmployeesProcessed: employees.length,
+      totalEmployeesProcessed: payslips.length,
       payslips,
     };
   }
@@ -232,106 +151,85 @@ export class PayrollService {
       include: {
         employee: {
           select: {
-            firstName: true, lastName: true, payrollNumber: true,
-            department: { select: { name: true, code: true } },
+            firstName: true,
+            lastName: true,
+            payrollNumber: true,
+            department: { select: { name: true } },
           },
         },
-        period: { select: { name: true, startDate: true, endDate: true } },
       },
-      orderBy: { createdAt: 'asc' },
     });
   }
 
-  async getEmployeePayslip(periodId: string, employeeId: string, tenantId: string) {
+  async getEmployeePayslip(employeeId: string, periodId: string, tenantId: string) {
     const payslip = await this.db.payslip.findFirst({
-      where: { periodId, employeeId, tenantId },
+      where: { employeeId, periodId, tenantId },
       include: {
         employee: {
           select: {
-            firstName: true, lastName: true, payrollNumber: true, email: true,
-            department: { select: { name: true, code: true } },
+            firstName: true,
+            lastName: true,
+            payrollNumber: true,
+            department: { select: { name: true } },
           },
         },
-        period: {
-          select: { name: true, startDate: true, endDate: true, status: true },
-        },
+        period: true,
       },
     });
-    if (!payslip) {
-      throw new NotFoundException(
-        `No payslip found for employee ${employeeId} in period ${periodId}.`,
-      );
-    }
+
+    if (!payslip) throw new NotFoundException('Payslip not found');
     return payslip;
   }
 
-  async approvePayslip(payslipId: string, dto: ApprovePayslipDTO) {
+  async approvePayslip(payslipId: string, tenantId: string) {
     const payslip = await this.db.payslip.findFirst({
-      where: { id: payslipId, tenantId: dto.tenantId },
+      where: { id: payslipId, tenantId },
     });
-    if (!payslip) throw new NotFoundException(`Payslip ${payslipId} not found.`);
-    if (payslip.status === 'PAID') {
-      throw new BadRequestException(`Payslip is already PAID.`);
-    }
+
+    if (!payslip) throw new NotFoundException('Payslip not found');
+    if (payslip.status === 'PAID')
+      throw new BadRequestException('Payslip is already marked as paid');
+
     return this.db.payslip.update({
       where: { id: payslipId },
       data: { status: 'APPROVED' },
     });
   }
 
-  async markPaid(payslipId: string, tenantId: string) {
-    const payslip = await this.db.payslip.findFirst({
-      where: { id: payslipId, tenantId },
-    });
-    if (!payslip) throw new NotFoundException(`Payslip ${payslipId} not found.`);
-    if (payslip.status !== 'APPROVED') {
-      throw new BadRequestException(
-        `Payslip must be APPROVED before marking as PAID.`,
-      );
-    }
-    return this.db.payslip.update({
-      where: { id: payslipId },
-      data: { status: 'PAID', paidAt: new Date() },
-    });
-  }
-
   async exportPayroll(periodId: string, tenantId: string) {
-    const period = await this.db.payrollPeriod.findFirst({
-      where: { id: periodId, tenantId },
-    });
-    if (!period) throw new NotFoundException(`Period ${periodId} not found.`);
-
     const payslips = await this.db.payslip.findMany({
       where: { periodId, tenantId },
       include: {
         employee: {
-          select: { firstName: true, lastName: true, payrollNumber: true },
+          select: {
+            firstName: true,
+            lastName: true,
+            payrollNumber: true,
+          },
+        },
+        period: {
+          select: { name: true, startDate: true, endDate: true },
         },
       },
     });
 
-    return {
-      exportedAt:  new Date().toISOString(),
-      periodName:  period.name,
-      periodStart: period.startDate,
-      periodEnd:   period.endDate,
-      note:        'Deductions computed by external payroll SaaS. This payload is the verified wage ledger only.',
-      records: payslips.map((p) => ({
-        payrollNumber:  p.employee.payrollNumber,
-        employeeName:   `${p.employee.firstName} ${p.employee.lastName}`,
-        period:         period.name,
-        periodStart:    period.startDate,
-        periodEnd:      period.endDate,
-        hourlyRate:     Number(p.hourlyRate),
-        regularHours:   Number(p.regularHoursWorked),
-        overtimeHours:  Number(p.overtimeHoursWorked),
-        nightHours:     Number(p.nightHoursWorked),
-        regularPay:     Number(p.baseSalary),
-        overtimePay:    Number(p.overtimePay),
-        allowances:     Number(p.allowances),
-        totalGross:     Number(p.totalGross),
-        status:         p.status,
-      })),
-    };
+    return payslips.map((p) => ({
+      payrollNumber: p.employee.payrollNumber,
+      employeeName: `${p.employee.firstName} ${p.employee.lastName}`,
+      period: p.period.name,
+      periodStart: p.period.startDate,
+      periodEnd: p.period.endDate,
+      hourlyRate: p.hourlyRate,
+      regularHours: p.regularHoursWorked,
+      overtimeHours: p.overtimeHoursWorked,
+      nightHours: p.nightHoursWorked,
+      baseSalary: p.baseSalary,
+      overtimePay: p.overtimePay,
+      allowances: p.allowances,
+      totalGross: p.totalGross,
+      totalDeductions: p.totalDeductions,
+      netPay: p.netPay,
+      status: p.status,
+    }));
   }
 }

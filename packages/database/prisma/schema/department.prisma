@@ -1,22 +1,16 @@
-// Location: packages/database/prisma/schema/department.prisma
-
 model Department {
-  id       String @id @default(uuid()) @db.Uuid
-  tenantId String @map("tenant_id") @db.Uuid
-  name     String @db.VarChar(100) // e.g., "Intensive Care Unit"
-  code     String @db.VarChar(20) // e.g., "ICU"
-
+  id                String             @id @default(uuid()) @db.Uuid
+  tenantId          String             @map("tenant_id") @db.Uuid
+  name              String             @db.VarChar(100)
+  code              String             @db.VarChar(20)
   /// Dynamic departmental-level operational rule sets (e.g., specific grace periods, break rules)
   /// Structure: { "gracePeriodMinutes": 0, "autoDeductBreakMinutes": 30 }
-  rules Json @default("{}") @map("rules") @db.JsonB
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  // Relationships
+  rules             Json               @default("{}") @map("rules")
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  users             User[] // Clinicians historically home-contracted to this department
-  rosterAssignments RosterAssignment[] // Assignments run here (including floating staff logs)
+  rosterAssignments RosterAssignment[]
+  users             User[]
 
   @@unique([tenantId, code])
   @@index([tenantId])

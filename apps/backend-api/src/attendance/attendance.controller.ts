@@ -8,13 +8,13 @@ import {
   Query,
   Req,
   UseGuards,
-  ParseUUIDPipe,
+  ParseUUIDPipe
 } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { PrismaService } from '../database/prisma.service'; // adjust path as needed
+import { DatabaseService } from '../database/database.service'; // adjust path as needed
 import { UserRole } from '../employee/users/enum/user-role.enum'; // adjust path as needed
 import { AttendanceLog , Prisma } from '@chronos/database';
 class IngestLogDto {
@@ -50,7 +50,7 @@ class RecalculateDto {
 export class AttendanceController {
   constructor(
     private readonly attendanceService: AttendanceService,
-    private readonly db: PrismaService,
+    private readonly db: DatabaseService,
   ) {}
 
   // ===== INGEST ENDPOINTS =====

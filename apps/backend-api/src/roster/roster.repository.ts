@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { DatabaseService } from '../database/database.service';
 
 export interface ShiftTemplateListFilters {
   search?: string;
@@ -11,7 +11,7 @@ export interface ShiftTemplateListFilters {
 
 @Injectable()
 export class RosterRepository {
-  constructor(private readonly database: PrismaService) {}
+  constructor(private readonly database: DatabaseService) {}
 
   async listShiftTemplates(tenantId: string, filters: ShiftTemplateListFilters) {
     const where: any = {

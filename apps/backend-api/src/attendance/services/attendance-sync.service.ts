@@ -1,7 +1,7 @@
 // src/attendance/services/attendance-sync.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { AttendanceRepository } from '../repositories/attendance.repository';
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 
 @Injectable()
 export class AttendanceSyncService {
@@ -9,7 +9,7 @@ export class AttendanceSyncService {
 
   constructor(
     private readonly attendanceRepository: AttendanceRepository,
-    private readonly db: PrismaService,
+    private readonly db: DatabaseService,
   ) {}
 
   // Existing method

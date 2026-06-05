@@ -1,56 +1,47 @@
-// Location: packages/database/prisma/schema/payroll.prisma
-
 model PayrollPeriod {
-  id        String   @id @default(uuid()) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
-  name      String   @db.VarChar(100) // e.g., "May 2026 Remittance Cycle"
-  startDate DateTime @map("start_date") @db.Date
-  endDate   DateTime @map("end_date") @db.Date
-  status    String   @default("OPEN") @db.VarChar(20) // "OPEN" | "PROCESSING" | "FINALIZED"
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  externalSystem  String?   @map("external_system") @db.VarChar(50) // e.g., "SAGE_ERP", "WORKPAY", "INTERNAL_MANUAL"
-  synchronizedAt  DateTime? @map("synchronized_at") @db.Timestamptz(6)
-
-  // Relationships
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  payslips Payslip[]
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  name           String    @db.VarChar(100)
+  startDate      DateTime  @map("start_date") @db.Date
+  endDate        DateTime  @map("end_date") @db.Date
+  status         String    @default("OPEN") @db.VarChar(20)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  externalSystem String?   @map("external_system") @db.VarChar(50)
+  synchronizedAt DateTime? @map("synchronized_at") @db.Timestamptz(6)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payslips       Payslip[]
 
   @@index([tenantId])
   @@map("payroll_periods")
 }
 
 model Payslip {
-  id                  String  @id @default(uuid()) @db.Uuid
-  tenantId            String  @map("tenant_id") @db.Uuid
-  periodId            String  @map("period_id") @db.Uuid
-  employeeId          String  @map("employee_id") @db.Uuid
-  hourlyRate          Decimal @map("hourly_rate") @db.Decimal(12, 2)
-  regularHoursWorked  Decimal @map("regular_hours_worked") @db.Decimal(8, 2)
-  overtimeHoursWorked Decimal @default(0.00) @map("overtime_hours_worked") @db.Decimal(8, 2)
-  nightHoursWorked    Decimal @default(0.00) @map("night_hours_worked") @db.Decimal(8, 2)
-  baseSalary          Decimal @map("base_salary") @db.Decimal(12, 2)
-  overtimePay         Decimal @default(0.00) @map("overtime_pay") @db.Decimal(12, 2)
-  allowances          Decimal @default(0.00) @db.Decimal(12, 2)
-  totalGross          Decimal @map("total_gross") @db.Decimal(12, 2)
-  totalDeductions     Decimal @default(0.00) @map("total_deductions") @db.Decimal(12, 2)
-  netPay              Decimal @map("net_pay") @db.Decimal(12, 2)
-
+  id                  String        @id @default(uuid()) @db.Uuid
+  tenantId            String        @map("tenant_id") @db.Uuid
+  periodId            String        @map("period_id") @db.Uuid
+  employeeId          String        @map("employee_id") @db.Uuid
+  hourlyRate          Decimal       @map("hourly_rate") @db.Decimal(12, 2)
+  regularHoursWorked  Decimal       @map("regular_hours_worked") @db.Decimal(8, 2)
+  overtimeHoursWorked Decimal       @default(0.00) @map("overtime_hours_worked") @db.Decimal(8, 2)
+  nightHoursWorked    Decimal       @default(0.00) @map("night_hours_worked") @db.Decimal(8, 2)
+  baseSalary          Decimal       @map("base_salary") @db.Decimal(12, 2)
+  overtimePay         Decimal       @default(0.00) @map("overtime_pay") @db.Decimal(12, 2)
+  allowances          Decimal       @default(0.00) @db.Decimal(12, 2)
+  totalGross          Decimal       @map("total_gross") @db.Decimal(12, 2)
+  totalDeductions     Decimal       @default(0.00) @map("total_deductions") @db.Decimal(12, 2)
+  netPay              Decimal       @map("net_pay") @db.Decimal(12, 2)
   /// Breakdown of itemized statutory computations
   /// Document format: { "nssf": 2400.00, "shif": 1850.00, "housingLevy": 1200.00, "paye": 14200.00 }
-  deductionsBreakdown Json @map("deductions_breakdown") @db.JsonB
-  allowancesBreakdown Json @map("allowances_breakdown") @db.JsonB
-
-  status    String    @default("UNPAID") @db.VarChar(20) // "UNPAID" | "APPROVED" | "PAID"
-  paidAt    DateTime? @map("paid_at") @db.Timestamptz(6)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  // Relationships
-  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  period   PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  employee User          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  deductionsBreakdown Json          @map("deductions_breakdown")
+  allowancesBreakdown Json          @map("allowances_breakdown")
+  status              String        @default("UNPAID") @db.VarChar(20)
+  paidAt              DateTime?     @map("paid_at") @db.Timestamptz(6)
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  employee            User          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  period              PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([employeeId])

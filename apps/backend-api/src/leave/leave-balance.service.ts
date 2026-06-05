@@ -1,56 +1,41 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-
-import { LeaveBalance } from './leave-balance.entity';
+import { DatabaseService } from '../database/database.service';
 
 @Injectable()
 export class LeaveBalanceService {
-  constructor(
-    @InjectRepository(LeaveBalance)
-    private readonly repo: Repository<LeaveBalance>,
-  ) {}
+  constructor(private readonly db: DatabaseService) {}
 
-  // GET USER LEAVE BALANCE
-  async getBalance(
-    userId: string,
-    year: number,
-  ): Promise<LeaveBalance | null> {
-    return this.repo.findOne({
-      where: {
-        user: {
-          id: userId,
-        } as any,
-        year,
-      },
-      relations: ['user'],
+  async getBalance(tenantId: string, userId: string, year: number) {
+    return this.db.leaveBalance.findFirst({
+      where: { tenantId, userId, year },
     });
   }
 
-  // CREATE INITIAL BALANCE
   async createInitialBalance(
+    tenantId: string,
     userId: string,
     year: number,
-    total: number,
-  ): Promise<LeaveBalance> {
-    const balance = this.repo.create({
-      user: { id: userId } as any,
-      year,
-      totalDays: total,
-      usedDays: 0,
-      remainingDays: total,
+    totalDays: number,
+  ) {
+    return this.db.leaveBalance.create({
+      data: {
+        tenantId,
+        userId,
+        year,
+        totalDays,
+        usedDays: 0,
+        remainingDays: totalDays,
+      },
     });
-
-    return this.repo.save(balance);
   }
 
-  // DEDUCT LEAVE DAYS
   async deductLeave(
+    tenantId: string,
     userId: string,
     days: number,
     year: number,
-  ): Promise<LeaveBalance> {
-    const balance = await this.getBalance(userId, year);
+  ) {
+    const balance = await this.getBalance(tenantId, userId, year);
 
     if (!balance) {
       throw new NotFoundException('Leave balance not found');
@@ -60,46 +45,55 @@ export class LeaveBalanceService {
       throw new Error('Insufficient leave balance');
     }
 
-    balance.usedDays += days;
-    balance.remainingDays -= days;
-
-    return this.repo.save(balance);
+    return this.db.leaveBalance.update({
+      where: { id: balance.id },
+      data: {
+        usedDays: balance.usedDays + days,
+        remainingDays: balance.remainingDays - days,
+      },
+    });
   }
 
-  // ADD LEAVE DAYS
   async addLeaveDays(
+    tenantId: string,
     userId: string,
     days: number,
     year: number,
-  ): Promise<LeaveBalance> {
-    const balance = await this.getBalance(userId, year);
+  ) {
+    const balance = await this.getBalance(tenantId, userId, year);
 
     if (!balance) {
       throw new NotFoundException('Leave balance not found');
     }
 
-    balance.totalDays += days;
-    balance.remainingDays += days;
-
-    return this.repo.save(balance);
+    return this.db.leaveBalance.update({
+      where: { id: balance.id },
+      data: {
+        totalDays: balance.totalDays + days,
+        remainingDays: balance.remainingDays + days,
+      },
+    });
   }
 
-  // RESET YEARLY BALANCE
   async resetBalance(
+    tenantId: string,
     userId: string,
     year: number,
     totalDays: number,
-  ): Promise<LeaveBalance> {
-    const balance = await this.getBalance(userId, year);
+  ) {
+    const balance = await this.getBalance(tenantId, userId, year);
 
     if (!balance) {
       throw new NotFoundException('Leave balance not found');
     }
 
-    balance.totalDays = totalDays;
-    balance.usedDays = 0;
-    balance.remainingDays = totalDays;
-
-    return this.repo.save(balance);
+    return this.db.leaveBalance.update({
+      where: { id: balance.id },
+      data: {
+        totalDays,
+        usedDays: 0,
+        remainingDays: totalDays,
+      },
+    });
   }
 }

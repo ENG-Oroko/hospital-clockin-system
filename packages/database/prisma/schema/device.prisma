@@ -1,18 +1,14 @@
-// Location: packages/database/prisma/schema/device.prisma
-
 model Device {
-  id         String   @id @default(uuid()) @db.Uuid
-  tenantId   String   @map("tenant_id") @db.Uuid
-  name       String   @db.VarChar(100) // e.g., "Maternity Wing Gate A"
-  serialCode String   @unique @map("serial_code") @db.VarChar(100) // Hardware MAC or manufacturer identifier
-  ipAddress  String?  @map("ip_address") @db.VarChar(45) // Local LAN endpoint mapping for Go gateway polling
-  isActive   Boolean  @default(true) @map("is_active")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  // Relationships
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id             String          @id @default(uuid()) @db.Uuid
+  tenantId       String          @map("tenant_id") @db.Uuid
+  name           String          @db.VarChar(100)
+  serialCode     String          @unique @map("serial_code") @db.VarChar(100)
+  ipAddress      String?         @map("ip_address") @db.VarChar(45)
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
   attendanceLogs AttendanceLog[]
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@map("devices")

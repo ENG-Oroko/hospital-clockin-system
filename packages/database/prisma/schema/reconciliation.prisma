@@ -1,27 +1,19 @@
-// Location: packages/database/prisma/schema/reconciliation.prisma
-
 model ReconciliationLog {
-  id                 String @id @default(uuid()) @db.Uuid
-  tenantId           String @map("tenant_id") @db.Uuid
-  rosterAssignmentId String @unique @map("roster_assignment_id") @db.Uuid
-
-  clockInTime  DateTime? @map("clock_in_time") @db.Timestamptz(6)
-  clockOutTime DateTime? @map("clock_out_time") @db.Timestamptz(6)
-
-  calculatedBaseHours  Decimal @default(0.00) @map("calculated_base_hours") @db.Decimal(6, 2)
-  calculatedOvertime   Decimal @default(0.00) @map("calculated_overtime") @db.Decimal(6, 2)
-  calculatedNightShift Decimal @default(0.00) @map("calculated_night_shift") @db.Decimal(6, 2)
-
-  isFlagged       Boolean @default(false) @map("is_flagged")
-  exceptionReason String? @map("exception_reason") @db.VarChar(255) // "MISSED_OUT" | "LATE_CHECKIN"
-  isResolved      Boolean @default(true) @map("is_resolved")
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  // Relationships
-  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  rosterAssignment RosterAssignment @relation(fields: [rosterAssignmentId], references: [id], onDelete: Cascade)
+  id                   String           @id @default(uuid()) @db.Uuid
+  tenantId             String           @map("tenant_id") @db.Uuid
+  rosterAssignmentId   String           @unique @map("roster_assignment_id") @db.Uuid
+  clockInTime          DateTime?        @map("clock_in_time") @db.Timestamptz(6)
+  clockOutTime         DateTime?        @map("clock_out_time") @db.Timestamptz(6)
+  calculatedBaseHours  Decimal          @default(0.00) @map("calculated_base_hours") @db.Decimal(6, 2)
+  calculatedOvertime   Decimal          @default(0.00) @map("calculated_overtime") @db.Decimal(6, 2)
+  calculatedNightShift Decimal          @default(0.00) @map("calculated_night_shift") @db.Decimal(6, 2)
+  isFlagged            Boolean          @default(false) @map("is_flagged")
+  exceptionReason      String?          @map("exception_reason") @db.VarChar(255)
+  isResolved           Boolean          @default(true) @map("is_resolved")
+  createdAt            DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  rosterAssignment     RosterAssignment @relation(fields: [rosterAssignmentId], references: [id], onDelete: Cascade)
+  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@map("reconciliation_logs")

@@ -1,18 +1,14 @@
-// Location: packages/database/prisma/schema/reports.prisma
-
 model CompiledReport {
   id             String   @id @default(uuid()) @db.Uuid
   tenantId       String   @map("tenant_id") @db.Uuid
-  reportType     String   @map("report_type") @db.VarChar(50) // "MONTHLY_SUMMARY" | "OVERTIME_AUDIT"
+  reportType     String   @map("report_type") @db.VarChar(50)
   generatedById  String   @map("generated_by_id") @db.Uuid
   dateRangeStart DateTime @map("date_range_start") @db.Date
   dateRangeEnd   DateTime @map("date_range_end") @db.Date
-  compiledData   Json     @map("compiled_data") @db.JsonB
+  compiledData   Json     @map("compiled_data")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  // Relationships
-  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  generatedBy User   @relation(fields: [generatedById], references: [id], onDelete: Cascade)
+  generatedBy    User     @relation(fields: [generatedById], references: [id], onDelete: Cascade)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, reportType])
   @@map("compiled_reports")

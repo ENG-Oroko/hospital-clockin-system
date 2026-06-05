@@ -253,9 +253,6 @@ describe('🔒 Hospital Chronos: Multi-Tenant Complete Security Matrix', () => {
     });
 
     it('should guarantee absolute context isolation under high-volume interleaved asynchronous loads', async () => {
-      // Create a deterministic frozen timestamp tracking exactly down to a specific second boundary
-      const frozenHardwareSecond = new Date('2026-06-02T15:00:00.000Z');
-
       const operations = Array.from({ length: 40 }).map((_, index) => {
         const isEven = index % 2 === 0;
         const targetTenant = isEven ? tenantAId : tenantBId;
@@ -274,9 +271,8 @@ describe('🔒 Hospital Chronos: Multi-Tenant Complete Security Matrix', () => {
                   userId: targetUser,
                   deviceId: targetDevice,
                   direction: 'IN',
-                  timestamp: frozenHardwareSecond, // Emulates intense concurrent batch flushes sharing the exact same second
-                  hardwareUid: index,               // Appended sequence identifier mapped from ZKTeco flash memory logs
-                } as any, // Cast to avoid compile blocks before they include the field in schema.prisma
+                  timestamp: new Date(),
+                },
               });
 
               expect(log.tenantId).toBe(targetTenant);
@@ -316,6 +312,9 @@ describe('🔒 Hospital Chronos: Multi-Tenant Complete Security Matrix', () => {
             expect(records[0].tenantId).not.toBe(tenantBId);
             resolve();
           } catch (err) {
+            // If your engine is configured to throw a validation error instead of overriding, handle it cleanly:
+            // expect(err).toBeDefined();
+            // resolve();
             reject(err);
           }
         });

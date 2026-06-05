@@ -1,21 +1,177 @@
-// Location: packages/database/prisma/schema/notifications.prisma
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  EXPIRED
+}
+
+enum NotificationTriggerEvent {
+  CLOCK_IN
+  CLOCK_OUT
+  LATE_IN
+  EARLY_OUT
+  MISSED_PUNCH
+  MISSED_BREAK
+  OVERTIME_APPROACHING
+  OVERTIME_RECORDED
+  LEAVE_REQUEST_CREATED
+  LEAVE_REQUEST_APPROVED
+  LEAVE_REQUEST_REJECTED
+  SHIFT_ASSIGNED
+  SHIFT_CHANGED
+  SHIFT_SWAP_REQUESTED
+  OPEN_SHIFT_BID
+  TIMECARD_EDITED
+  SCHEDULE_POSTED
+  CLOCK_IN_REMINDER
+  UNSUBMITTED_TIMESHEET
+  INTEGRATION_FAILED
+}
 
 model NotificationLog {
-  id        String   @id @default(uuid()) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  channel   String   @db.VarChar(20) // "SMS" | "EMAIL" | "PUSH"
-  recipient String   @db.VarChar(255)
-  title     String   @db.VarChar(150)
-  body      String   @db.Text
-  status    String   @default("PENDING") @db.VarChar(20) // "PENDING" | "SENT" | "FAILED"
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id           String                    @id @default(uuid()) @db.Uuid
+  tenantId     String                    @map("tenant_id") @db.Uuid
+  userId       String                    @map("user_id") @db.Uuid
+  channel      NotificationChannel
+  recipient    String                    @db.VarChar(255)
+  title        String                    @db.VarChar(150)
+  body         String
+  status       NotificationStatus        @default(PENDING)
+  priority     NotificationPriority      @default(MEDIUM)
+  triggerEvent NotificationTriggerEvent? @map("trigger_event")
+  actions      Json?                     @db.JsonB
+  metadata     Json?                     @db.JsonB
+  retryCount   Int                       @default(0) @map("retry_count")
+  errorMessage String?                   @map("error_message") @db.VarChar(500)
+  sentAt       DateTime?                 @map("sent_at") @db.Timestamptz(6)
+  deliveredAt  DateTime?                 @map("delivered_at") @db.Timestamptz(6)
+  readAt       DateTime?                 @map("read_at") @db.Timestamptz(6)
+  expiresAt    DateTime?                 @map("expires_at") @db.Timestamptz(6)
+  createdAt    DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  // Relationships
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([userId])
+  @@index([tenantId, status])
+  @@index([tenantId, priority])
+  @@index([triggerEvent])
+  @@index([expiresAt])
+  @@index([createdAt])
   @@map("notification_logs")
+}
+
+model NotificationPreference {
+  id        String                   @id @default(uuid()) @db.Uuid
+  tenantId  String                   @map("tenant_id") @db.Uuid
+  userId    String                   @map("user_id") @db.Uuid
+  event     NotificationTriggerEvent
+  channel   NotificationChannel
+  enabled   Boolean                  @default(true)
+  createdAt DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, event, channel])
+  @@index([tenantId, userId])
+  @@index([event])
+  @@map("notification_preferences")
+}
+
+model UserNotificationSettings {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  userId            String   @unique @map("user_id") @db.Uuid // @unique added here
+  quietHoursEnabled Boolean  @default(false) @map("quiet_hours_enabled")
+  quietHoursStart   String?  @default("22:00") @map("quiet_hours_start") @db.VarChar(5)
+  quietHoursEnd     String?  @default("07:00") @map("quiet_hours_end") @db.VarChar(5)
+  digestEnabled     Boolean  @default(true) @map("digest_enabled")
+  digestFrequency   String?  @default("daily") @map("digest_frequency") @db.VarChar(20)
+  emailDigest       Boolean  @default(true) @map("email_digest")
+  pushDigest        Boolean  @default(false) @map("push_digest")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@map("user_notification_settings")
+}
+
+model NotificationDigest {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String    @db.VarChar(50)
+  title     String    @db.VarChar(200)
+  body      String
+  items     Json      @db.JsonB
+  status    String    @default("pending") @db.VarChar(20)
+  sentAt    DateTime? @map("sent_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@index([status])
+  @@map("notification_digests")
+}
+
+model NotificationTemplate {
+  id        String                   @id @default(uuid()) @db.Uuid
+  tenantId  String                   @map("tenant_id") @db.Uuid
+  event     NotificationTriggerEvent
+  channel   NotificationChannel
+  title     String                   @db.VarChar(150)
+  body      String
+  actions   Json?                    @db.JsonB
+  isActive  Boolean                  @default(true) @map("is_active")
+  version   Int                      @default(1)
+  createdAt DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, event, channel])
+  @@index([tenantId, event])
+  @@map("notification_templates")
+}
+
+model NotificationRateLimit {
+  id          String                   @id @default(uuid()) @db.Uuid
+  tenantId    String                   @map("tenant_id") @db.Uuid
+  userId      String                   @map("user_id") @db.Uuid
+  event       NotificationTriggerEvent
+  count       Int                      @default(1)
+  windowStart DateTime                 @map("window_start") @db.Timestamptz(6)
+  windowEnd   DateTime                 @map("window_end") @db.Timestamptz(6)
+  createdAt   DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, event, windowStart])
+  @@index([tenantId, userId, event])
+  @@map("notification_rate_limits")
 }

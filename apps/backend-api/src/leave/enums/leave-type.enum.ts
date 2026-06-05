@@ -6,4 +6,6 @@ export enum LeaveType {
   UNPAID = 'UNPAID',
   COMPASSIONATE = 'COMPASSIONATE',
   STUDY = 'STUDY',
+  BEREAVEMENT = 'BEREAVEMENT',
+  OTHER = 'OTHER',
 }

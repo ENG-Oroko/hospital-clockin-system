@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { DatabaseModule } from './database/database.module';
 import { QueueModule } from './queue/queue.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { JobsModule } from './jobs/jobs.module';
+import { TenantContextMiddleware } from './common/tenant/tenant-context.middleware';
 import { TenantModule } from './tenant/tenant.module';
 import { DepartmentModule } from './department/department.module';
 import { EmployeeModule } from './employee/employee.module';
@@ -18,24 +19,11 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PayrollModule } from './payroll/payroll.module';
 
 @Module({
-  imports: [
-    DatabaseModule,
-    QueueModule,
-    WebsocketModule,
-    JobsModule,
-    TenantModule,
-    DepartmentModule,
-    EmployeeModule,
-    LeaveModule,
-    SettingsModule,
-    AuthModule,
-    DeviceModule,
-    RosterModule,
-    AttendanceModule,
-    ReconciliationModule,
-    ReportsModule,
-    NotificationsModule,
-    PayrollModule,
-  ],
+  imports: [DatabaseModule, QueueModule, WebsocketModule, JobsModule, TenantModule, DepartmentModule, EmployeeModule, LeaveModule, SettingsModule, AuthModule, DeviceModule, RosterModule, AttendanceModule, ReconciliationModule, ReportsModule, NotificationsModule, PayrollModule],
+  providers: [TenantContextMiddleware]
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(TenantContextMiddleware).forRoutes('*');
+  }
+}

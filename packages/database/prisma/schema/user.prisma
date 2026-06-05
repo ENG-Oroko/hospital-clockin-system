@@ -1,50 +1,42 @@
-enum Role {
-  SUPER_ADMIN
-  HOSPITAL_ADMIN
-  DEPT_HEAD
-  EMPLOYEE
-}
-
 model User {
-  id               String  @id @default(uuid()) @db.Uuid
-  tenantId         String  @map("tenant_id") @db.Uuid
-  departmentId     String? @map("department_id") @db.Uuid // Home-base department assignment
-  payrollNumber    String  @map("payroll_number") @db.VarChar(50)
-  firstName        String  @map("first_name") @db.VarChar(100)
-  lastName         String  @map("last_name") @db.VarChar(100)
-  email            String  @db.VarChar(255)
-  phoneNumber      String? @map("phone_number") @db.VarChar(30)
-  passwordHash     String  @map("password_hash") @db.VarChar(255)
-  role             String  @default("EMPLOYEE") @db.VarChar(30) // "SUPER_ADMIN" | "HOSPITAL_ADMIN" | "DEPT_HEAD" | "EMPLOYEE"
-  hourlyRate       Decimal @default(0.00) @map("hourly_rate") @db.Decimal(12, 2)
-  isActive         Boolean @default(true) @map("is_active")
-  employmentType   String  @default("FULL_TIME") @map("employment_type") @db.VarChar(30)
-  employmentStatus String  @default("ACTIVE") @map("employment_status") @db.VarChar(30)
-
+  id                        String                    @id @default(uuid()) @db.Uuid
+  tenantId                  String                    @map("tenant_id") @db.Uuid
+  departmentId              String?                   @map("department_id") @db.Uuid
+  payrollNumber             String                    @map("payroll_number") @db.VarChar(50)
+  firstName                 String                    @map("first_name") @db.VarChar(100)
+  lastName                  String                    @map("last_name") @db.VarChar(100)
+  email                     String                    @db.VarChar(255)
+  phoneNumber               String?                   @map("phone_number") @db.VarChar(30)
+  passwordHash              String                    @map("password_hash") @db.VarChar(255)
+  role                      String                    @default("EMPLOYEE") @db.VarChar(30)
+  hourlyRate                Decimal                   @default(0.00) @map("hourly_rate") @db.Decimal(12, 2)
+  isActive                  Boolean                   @default(true) @map("is_active")
+  employmentType            String                    @default("FULL_TIME") @map("employment_type") @db.VarChar(30)
+  employmentStatus          String                    @default("ACTIVE") @map("employment_status") @db.VarChar(30)
   /// The local identification PIN mapped inside the physical hardware scanner terminal (e.g., "1002")
-  devicePin         String    @map("device_pin") @db.VarChar(50)
-  emergencyContacts Json      @default("[]") @map("emergency_contacts") @db.JsonB
-  profileMetadata   Json      @default("{}") @map("profile_metadata") @db.JsonB
-  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz(6)
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  // Relationships
-  tenant                    Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  department                Department?               @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  attendanceLogs            AttendanceLog[]
+  devicePin                 String                    @map("device_pin") @db.VarChar(50)
+  emergencyContacts         Json                      @default("[]") @map("emergency_contacts")
+  profileMetadata           Json                      @default("{}") @map("profile_metadata")
+  deletedAt                 DateTime?                 @map("deleted_at") @db.Timestamptz(6)
+  createdAt                 DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   attendanceAudits          AttendanceAudit[]
-  employeeAudits            EmployeeAudit[]           @relation("EmployeeAuditEmployee")
-  employeeAuditActions      EmployeeAudit[]           @relation("EmployeeAuditActor")
-  leaveRequests             LeaveRequest[]
-  compiledReports           CompiledReport[]
-  payslips                  Payslip[]
-  rosterAssignments         RosterAssignment[]
-  rosterAssignmentHistories RosterAssignmentHistory[]
-  notificationLogs          NotificationLog[]
+  attendanceLogs            AttendanceLog[]
   attendanceSummaries       AttendanceSummary[]
-
+  compiledReports           CompiledReport[]
+  employeeAuditActions      EmployeeAudit[]           @relation("EmployeeAuditActor")
+  employeeAudits            EmployeeAudit[]           @relation("EmployeeAuditEmployee")
+  leaveRequests             LeaveRequest[]
+  notificationLogs          NotificationLog[]
+  notificationPreferences   NotificationPreference[]
+  userNotificationSettings  UserNotificationSettings?
+  notificationDigests       NotificationDigest[]
+  notificationRateLimits    NotificationRateLimit[]
+  payslips                  Payslip[]
+  rosterAssignmentHistories RosterAssignmentHistory[]
+  rosterAssignments         RosterAssignment[]
+  department                Department?               @relation(fields: [departmentId], references: [id])
+  tenant                    Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
   @@unique([tenantId, payrollNumber])
@@ -62,15 +54,21 @@ model EmployeeAudit {
   employeeId    String   @map("employee_id") @db.Uuid
   actorUserId   String   @map("actor_user_id") @db.Uuid
   action        String   @db.VarChar(50)
-  previousValue Json?    @map("previous_value") @db.JsonB
-  newValue      Json?    @map("new_value") @db.JsonB
+  previousValue Json?    @map("previous_value")
+  newValue      Json?    @map("new_value")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  employee User   @relation("EmployeeAuditEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
-  actor    User   @relation("EmployeeAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  actor         User     @relation("EmployeeAuditActor", fields: [actorUserId], references: [id])
+  employee      User     @relation("EmployeeAuditEmployee", fields: [employeeId], references: [id])
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, employeeId, createdAt])
   @@index([actorUserId, createdAt])
   @@map("employee_audits")
+}
+
+enum Role {
+  SUPER_ADMIN
+  HOSPITAL_ADMIN
+  DEPT_HEAD
+  EMPLOYEE
 }

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Notification WebSocket Test</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 10px;
+            cursor: pointer;
+        }
+        
+        #messages {
+            border: 1px solid #ccc;
+            margin-top: 20px;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            background: #f9f9f9;
+        }
+        
+        .notification {
+            border-left: 3px solid #4CAF50;
+            margin: 5px 0;
+            padding: 10px;
+            background: white;
+        }
+        
+        .sms {
+            border-left-color: #2196F3;
+        }
+        
+        .email {
+            border-left-color: #FF9800;
+        }
+        
+        .attendance {
+            border-left-color: #9C27B0;
+        }
+        
+        .timestamp {
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>📱 Notification System Test</h1>
+    <div>
+        <button onclick="connect()">🔌 Connect</button>
+        <button onclick="disconnect()">❌ Disconnect</button>
+        <button onclick="register()">📝 Register User</button>
+        <button onclick="subscribe()">📡 Subscribe</button>
+        <button onclick="clearMessages()">🗑 Clear</button>
+    </div>
+    <div id="messages"></div>
+
+    <script>
+        let socket = null;
+
+        function addMessage(type, title, body, details = {}) {
+            const div = document.getElementById('messages');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `notification ${type}`;
+            msgDiv.innerHTML = `
+                <strong>${title}</strong><br>
+                ${body}<br>
+                <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                ${details.id ? `<div class="timestamp">ID: ${details.id}</div>` : ''}
+            `;
+            div.appendChild(msgDiv);
+            msgDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+        
+        function connect() {
+            socket = io('http://localhost:3000/notifications');
+            
+            socket.on('connect', () => {
+                addMessage('info', '✅ Connected', `Socket ID: ${socket.id}`);
+            });
+            
+            socket.on('connected', (data) => {
+                addMessage('info', '📡 Connection Confirmed', JSON.stringify(data));
+            });
+            
+            socket.on('notification', (notification) => {
+                addMessage(notification.channel || 'info', 
+                    `🔔 ${notification.title || 'Notification'}`, 
+                    notification.body || notification.message,
+                    notification);
+            });
+            
+            socket.on('new_notification', (notification) => {
+                addMessage(notification.channel || 'info', 
+                    `✨ New: ${notification.title || 'Notification'}`, 
+                    notification.body || notification.message,
+                    notification);
+            });
+            
+            socket.on('registered', (data) => {
+                addMessage('info', '✅ Registration', `User ${data.userId} registered for tenant ${data.tenantId}`);
+            });
+            
+            socket.on('subscribed', (data) => {
+                addMessage('info', '📡 Subscribed', `Channel: ${data.channel}`);
+            });
+            
+            socket.on('disconnect', () => {
+                addMessage('error', '❌ Disconnected', 'WebSocket connection closed');
+            });
+        }
+        
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                addMessage('info', '🔌 Disconnected', 'Manually disconnected');
+            }
+        }
+        
+        function register() {
+            if (socket) {
+                socket.emit('register', { 
+                    userId: 'user-001', 
+                    tenantId: 'tenant-001' 
+                });
+                addMessage('info', '📤 Registering', 'Sending registration request...');
+            }
+        }
+        
+        function subscribe() {
+            if (socket) {
+                socket.emit('subscribe:notifications', { 
+                    userId: 'user-001'
+                });
+                addMessage('info', '📤 Subscribing', 'Subscribing to notifications...');
+            }
+        }
+        
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+    </script>
+</body>
+
+</html>

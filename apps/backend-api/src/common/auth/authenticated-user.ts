@@ -7,4 +7,4 @@ export interface AuthenticatedUser {
   role: UserRole;
   tenantId: string;
   deptId: string | null;
-}
+} 

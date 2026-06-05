@@ -1,5 +1,5 @@
 // Location: packages/database/prisma/seed.ts
-import { db as prisma } from '../src/client';
+import { db as prisma } from '../src/client'; // 🛡️ Link to the hot-reload protected singleton
 
 async function main() {
   console.log('🚀 Starting system data seeding loop...');
@@ -13,7 +13,6 @@ async function main() {
     update: {},
     create: {
       name: 'St. Teresa Referral Hospital',
-      slug: 'st-teresa-referral-hospital', // ✨ Fixed: Added missing required slug property
       subdomain: 'st-teresa',
       licenseKey: 'CHRONOS-L4-STTERESA-99281-X',
       isActive: true,
@@ -100,7 +99,7 @@ async function main() {
       firstName: 'Joseph',
       lastName: 'Karanja',
       email: 'admin@stteresa.or.ke',
-      passwordHash: '$2b$10$eFzMWW8.NreT6PZ2MDRYfO7zR1U6H.L0G26u4bZ0W3w1g4vK7V1S6', 
+      passwordHash: '$2b$10$eFzMWW8.NreT6PZ2MDRYfO7zR1U6H.L0G26u4bZ0W3w1g4vK7V1S6', // Admin123!
       role: 'HOSPITAL_ADMIN',
       hourlyRate: 850.00,
       devicePin: '9999',
@@ -162,59 +161,46 @@ async function main() {
   // ==========================================
   console.log('📅 Seeding Shift Templates & Floating Assignments...');
   
-  // 🛡️ Safe query pattern bypassing missing unique index constraints
-  let dayShiftTemplate = await prisma.shiftTemplate.findFirst({
-    where: { 
-      tenantId: tenant.id, 
-      name: 'Clinical Day Rotation' 
-    }
+  const dayShiftTemplate = await prisma.shiftTemplate.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000001' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000001',
+      tenantId: tenant.id,
+      name: 'Clinical Day Rotation',
+      type: 'MORNING',
+      startTime: '07:00',
+      endTime: '19:00',
+    },
   });
 
-  if (!dayShiftTemplate) {
-    dayShiftTemplate = await prisma.shiftTemplate.create({
-      data: {
-        tenantId: tenant.id,
-        name: 'Clinical Day Rotation',
-        type: 'MORNING',
-        startTime: '07:00',
-        endTime: '19:00',
-        gracePeriodMinutes: 15,
-        overtimeThresholdMinutes: 0,
-        isOvernight: false,
-      },
-    });
-  }
-
   const todayString = new Date().toISOString().split('T')[0];
-  
-  // Cleaned up the findFirst conditional link to prevent runtime downstream ID collisions
-  let rosterAssignment = await prisma.rosterAssignment.findFirst({
+  const existingRosterAssignment = await prisma.rosterAssignment.findFirst({
     where: {
       tenantId: tenant.id,
       userId: floatingNurse.id,
       date: new Date(todayString),
       status: { not: 'CANCELLED' },
     },
+    orderBy: { createdAt: 'desc' },
   });
 
-  if (!rosterAssignment) {
-    rosterAssignment = await prisma.rosterAssignment.create({
-      data: {
-        tenantId: tenant.id,
-        userId: floatingNurse.id,
-        departmentId: icuDept.id,
-        shiftTemplateId: dayShiftTemplate.id,
-        date: new Date(todayString),
-        overriddenHourlyRate: 500.00,
-        status: 'UNVERIFIED',
-        startTimeSnapshot: dayShiftTemplate.startTime,
-        endTimeSnapshot: dayShiftTemplate.endTime,
-        gracePeriodSnapshot: dayShiftTemplate.gracePeriodMinutes,
-        overtimeThresholdSnapshot: dayShiftTemplate.overtimeThresholdMinutes,
-        overnightSnapshot: dayShiftTemplate.isOvernight,
-      },
-    });
-  }
+  const rosterAssignment = existingRosterAssignment ?? await prisma.rosterAssignment.create({
+    data: {
+      tenantId: tenant.id,
+      userId: floatingNurse.id,
+      departmentId: icuDept.id,
+      shiftTemplateId: dayShiftTemplate.id,
+      date: new Date(todayString),
+      overriddenHourlyRate: 500.00,
+      status: 'UNVERIFIED',
+      startTimeSnapshot: dayShiftTemplate.startTime,
+      endTimeSnapshot: dayShiftTemplate.endTime,
+      gracePeriodSnapshot: dayShiftTemplate.gracePeriodMinutes,
+      overtimeThresholdSnapshot: dayShiftTemplate.overtimeThresholdMinutes,
+      overnightSnapshot: dayShiftTemplate.isOvernight,
+    },
+  });
 
   // ==========================================
   // MODULE 7: ATTENDANCE TELEMETRY LOGS
@@ -343,7 +329,7 @@ async function main() {
       tenantId: tenant.id,
       name: 'May 2026 Main Cycle',
       startDate: new Date('2026-05-01'),
-      endDate: new Date('2025-05-31'),
+      endDate: new Date('2026-05-31'),
       status: 'OPEN',
     },
   });
@@ -383,3 +369,4 @@ main()
     console.error('❌ Critical failure detected in seed loop:', e);
     process.exit(1);
   });
+  // 🚀 CLEAN: Disconnect hook is entirely handled by the runtime lifecycle of the singleton!

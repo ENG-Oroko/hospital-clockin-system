@@ -1,12 +1,10 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-generator client {
-  provider        = "prisma-client-js"
-  //previewFeatures = ["prismaSchemaFolder"]
-  //output          = "../../src/generated/client"
 }
 
 enum UserRole {
@@ -32,10 +30,10 @@ enum ShiftStatus {
 }
 
 enum ShiftType {
-  MORNING   
-  AFTERNOON 
-  NIGHT     
-  CUSTOM    
+  MORNING
+  AFTERNOON
+  NIGHT
+  CUSTOM
 }
 
 enum DayOfWeek {
@@ -47,3 +45,4 @@ enum DayOfWeek {
   SATURDAY
   SUNDAY
 }
+

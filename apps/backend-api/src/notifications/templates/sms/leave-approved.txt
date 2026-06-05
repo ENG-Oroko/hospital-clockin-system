@@ -1,0 +1,1 @@
+✅ LEAVE APPROVED: Your {{leaveType}} request ({{startDate}} to {{endDate}}) approved by {{approverName}}. Balance: {{remainingBalance}} days. Details: {{detailsUrl}}

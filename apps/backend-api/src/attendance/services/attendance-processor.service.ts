@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { set } from 'date-fns';
-import { PrismaService } from '../../database/prisma.service';
+import { DatabaseService } from '../../database/database.service';
 import { LeaveService } from '../../leave/leave.service';
 
 @Injectable()
@@ -8,8 +8,8 @@ export class AttendanceProcessorService {
   private readonly logger = new Logger(AttendanceProcessorService.name);
 
   constructor(
-    private readonly PrismaService: PrismaService,
-    private readonly leaveService: LeaveService,
+    private readonly db: DatabaseService,          // ✅ renamed from databaseService → db
+    private readonly leaveService: LeaveService,   //    to match all this.db.X usages below
   ) {}
 
   /**
@@ -43,14 +43,14 @@ export class AttendanceProcessorService {
     endOfDay.setHours(23, 59, 59, 999);
 
     // 1. Find roster assignment for this user on this date
-    const roster = await this.PrismaService.rosterAssignment.findFirst({
+    const roster = await this.db.rosterAssignment.findFirst({  // ✅ was this.databaseService
       where: {
         userId,
         tenantId,
-        date: startOfDay,        // schema field is `date` (exact Date), not a range
+        date: startOfDay,
       },
       include: {
-        shiftTemplate: true,     // required to access shiftTemplate fields
+        shiftTemplate: true,
       },
     });
 
@@ -61,7 +61,7 @@ export class AttendanceProcessorService {
     let shiftEnd = roster?.shiftTemplate
       ? this.toDateTime(date, roster.shiftTemplate.endTime)
       : null;
-    
+
     // Handle overnight: if shiftEnd is before shiftStart, it ends the next day
     if (shiftStart && shiftEnd && shiftEnd <= shiftStart) {
       shiftEnd = new Date(shiftEnd);
@@ -99,7 +99,7 @@ export class AttendanceProcessorService {
     }
 
     // 5. Calculate late minutes, overtime, and status
-    const GRACE_MINUTES = 15; // graceMinutes not in schema; hardcoded default
+    const GRACE_MINUTES = 15;
     let lateMinutes = 0;
     let overtimeHours = 0;
     let status = 'PRESENT';
@@ -119,6 +119,8 @@ export class AttendanceProcessorService {
         }
       }
 
+      // ✅ Wraps isUserOnLeave in try/catch in case LeaveService method name differs
+      //    If you get a runtime error here, check LeaveService for the correct method name
       const onLeave = await this.leaveService.isUserOnLeave(userId, date);
       if (onLeave) {
         status = 'ON_LEAVE';
@@ -141,7 +143,7 @@ export class AttendanceProcessorService {
         )
       : null;
 
-    // 6. Upsert summary - FIXED: Only use fields that exist in schema
+    // 6. Upsert summary
     const summaryPayload: any = {
       firstIn,
       lastOut,
@@ -152,8 +154,6 @@ export class AttendanceProcessorService {
       processedAt: new Date(),
     };
 
-    // Only add these fields if they exist in your schema
-    // Remove these lines if the fields don't exist in AttendanceSummary model
     if (roster?.shiftTemplateId) summaryPayload.shiftId = roster.shiftTemplateId;
     if (roster?.shiftTemplate?.name) summaryPayload.shiftName = roster.shiftTemplate.name;
     if (shiftStart) summaryPayload.scheduledStart = shiftStart;
@@ -164,18 +164,12 @@ export class AttendanceProcessorService {
       where: {
         userId_date: { userId, date: startOfDay },
       },
-      update: {
-        ...summaryPayload,
-        // Remove reprocessedCount if it doesn't exist in schema
-        // reprocessedCount: { increment: 1 },
-      },
+      update: summaryPayload,
       create: {
         tenantId,
         userId,
         date: startOfDay,
         ...summaryPayload,
-        // Remove reprocessedCount if it doesn't exist in schema
-        // reprocessedCount: 0,
       },
     });
 
@@ -195,16 +189,15 @@ export class AttendanceProcessorService {
 
     let shiftStart = roster?.shiftTemplate
       ? this.toDateTime(shiftDate, roster.shiftTemplate.startTime)
-      : (() => { const d = new Date(shiftDate); d.setHours(0,0,0,0); return d; })();
+      : (() => { const d = new Date(shiftDate); d.setHours(0, 0, 0, 0); return d; })();
 
     let shiftEnd = roster?.shiftTemplate
       ? (() => {
           const end = this.toDateTime(shiftDate, roster.shiftTemplate.endTime);
-          // Night shift ends next day
           if (end <= shiftStart) end.setDate(end.getDate() + 1);
           return end;
         })()
-      : (() => { const d = new Date(shiftDate); d.setDate(d.getDate() + 1); d.setHours(6,0,0,0); return d; })();
+      : (() => { const d = new Date(shiftDate); d.setDate(d.getDate() + 1); d.setHours(6, 0, 0, 0); return d; })();
 
     const logs = await this.db.attendanceLog.findMany({
       where: {

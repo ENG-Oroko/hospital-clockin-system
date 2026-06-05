@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leave Request Approved</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #5cb85c;
+        }
+        .header h1 {
+            color: #5cb85c;
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 20px 0;
+        }
+        .success-box {
+            background-color: #dff0d8;
+            border-left: 4px solid #5cb85c;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #3c763d;
+        }
+        .details {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .details table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .details td {
+            padding: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .details td:first-child {
+            font-weight: bold;
+            width: 35%;
+        }
+        .status-approved {
+            display: inline-block;
+            padding: 4px 8px;
+            background-color: #5cb85c;
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 20px 0;
+            background-color: #5cb85c;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .button:hover {
+            background-color: #4cae4c;
+        }
+        .info-box {
+            background-color: #d9edf7;
+            border-left: 4px solid #31708f;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #31708f;
+        }
+        .team-list {
+            margin: 10px 0 0 20px;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+        @media only screen and (max-width: 480px) {
+            .container {
+                width: 100%;
+                margin: 0;
+                border-radius: 0;
+            }
+            .button {
+                display: block;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ Leave Request Approved</h1>
+        </div>
+        
+        <div class="content">
+            <p>Dear <strong>{{employeeName}}</strong>,</p>
+            
+            <div class="success-box">
+                <strong>Great news!</strong> Your leave request has been <span class="status-approved">APPROVED</span> by {{approverName}}.
+            </div>
+            
+            <div class="details">
+                <h3>Leave Details:</h3>
+                <table>
+                    <tr>
+                        <td>📋 Leave Type:</td>
+                        <td><strong>{{leaveType}}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>📅 Start Date:</td>
+                        <td><strong>{{startDate}}</strong> ({{startDay}})</td>
+                    </tr>
+                    <tr>
+                        <td>📅 End Date:</td>
+                        <td><strong>{{endDate}}</strong> ({{endDay}})</td>
+                    </tr>
+                    <tr>
+                        <td>⏱️ Duration:</td>
+                        <td><strong>{{durationDays}} days</strong> ({{businessDays}} business days)</td>
+                    </tr>
+                    <tr>
+                        <td>💼 Leave Balance After:</td>
+                        <td><strong>{{remainingBalance}} days</strong> remaining</td>
+                    </tr>
+                    {{#if partOfDay}}
+                    <tr>
+                        <td>⏰ Specific Hours:</td>
+                        <td>{{startTime}} to {{endTime}}</td>
+                    </tr>
+                    {{/if}}
+                    {{#if reason}}
+                    <tr>
+                        <td>📝 Reason:</td>
+                        <td><em>{{reason}}</em></td>
+                    </tr>
+                    {{/if}}
+                    <tr>
+                        <td>👔 Approved By:</td>
+                        <td>{{approverName}} ({{approverRole}})</td>
+                    </tr>
+                    <tr>
+                        <td>🕐 Approved On:</td>
+                        <td>{{approvedDate}} at {{approvedTime}}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            {{#if overlappingTeamMembers}}
+            <div class="info-box">
+                <strong>👥 Team Notice:</strong> The following team members also have leave during this period:
+                <ul class="team-list">
+                    {{#each overlappingTeamMembers}}
+                    <li>{{this.name}} ({{this.leaveType}} - {{this.dates}})</li>
+                    {{/each}}
+                </ul>
+            </div>
+            {{/if}}
+            
+            {{#if requiresAction}}
+            <div class="info-box">
+                <strong>⚠️ Action Required:</strong> {{actionRequiredMessage}}
+            </div>
+            {{/if}}
+            
+            <div style="text-align: center;">
+                <a href="{{calendarUrl}}" class="button">📅 Add to Calendar</a>
+                <a href="{{leaveDetailsUrl}}" class="button" style="background-color: #337ab7;">📋 View Details</a>
+            </div>
+            
+            <div class="details">
+                <h3>What happens next?</h3>
+                <ul style="margin: 10px 0 0 20px;">
+                    <li>Your leave has been recorded in the system</li>
+                    <li>Your team has been notified of your absence</li>
+                    <li>A reminder will be sent 1 day before your leave starts</li>
+                    <li>You can view your leave history in the employee portal</li>
+                    {{#if needsBackfill}}
+                    <li>A backfill request has been sent to {{backfillContact}}</li>
+                    {{/if}}
+                </ul>
+            </div>
+            
+            {{#if autoApproved}}
+            <div class="info-box">
+                <strong>ℹ️ Auto-Approval Notice:</strong> This request was automatically approved as it meets company policy criteria.
+            </div>
+            {{/if}}
+            
+            {{#if conditionalApproval}}
+            <div class="info-box">
+                <strong>📌 Conditional Approval:</strong> {{conditionDetails}}
+            </div>
+            {{/if}}
+            
+            <div class="details">
+                <h3>Need to make changes?</h3>
+                <p>If your plans change or you need to modify your leave request:</p>
+                <ul>
+                    <li>Contact your manager directly: <a href="mailto:{{managerEmail}}">{{managerEmail}}</a></li>
+                    <li>Submit a modification request <a href="{{modifyUrl}}">here</a> (at least 48 hours before start date)</li>
+                    <li>Cancellation policy: {{cancellationPolicy}}</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated notification from the H Clock-In System.</p>
+            <p>Need assistance? Contact HR at <a href="mailto:{{hrEmail}}">{{hrEmail}}</a> or visit the <a href="{{helpUrl}}">Leave Policy Guide</a></p>
+            <p>&copy; {{currentYear}} H Clock-In System. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { DatabaseService } from '../database/database.service';
 
 export interface EmployeeListFilters {
   search?: string;
@@ -14,7 +14,7 @@ export interface EmployeeListFilters {
 
 @Injectable()
 export class EmployeeRepository {
-  constructor(private readonly database: PrismaService) {}
+  constructor(private readonly database: DatabaseService) {}
 
   async list(tenantId: string, filters: EmployeeListFilters) {
     const where: any = {
@@ -37,22 +37,23 @@ export class EmployeeRepository {
         : {}),
     };
 
-    const [items, total] = await this.database.client.$transaction([
-      this.database.client.user.findMany({
+    // ✅ DatabaseService extends PrismaClient directly — no .client needed
+    const [items, total] = await this.database.$transaction([
+      this.database.user.findMany({
         where,
         select: this.employeeSelect(),
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         skip: filters.skip,
         take: filters.take,
       }),
-      this.database.client.user.count({ where }),
+      this.database.user.count({ where }),
     ]);
 
     return { items, total };
   }
 
   async findByIdOrThrow(tenantId: string, id: string, includeDeleted = false) {
-    const employee = await this.database.client.user.findFirst({
+    const employee = await this.database.user.findFirst({  // ✅ no .client
       where: {
         id,
         tenantId,
@@ -69,7 +70,7 @@ export class EmployeeRepository {
   }
 
   async assertDepartmentBelongsToTenant(tenantId: string, departmentId: string): Promise<void> {
-    const department = await this.database.client.department.findFirst({
+    const department = await this.database.department.findFirst({  // ✅ no .client
       where: { id: departmentId, tenantId },
       select: { id: true },
     });
@@ -81,7 +82,7 @@ export class EmployeeRepository {
 
   async create(tenantId: string, data: any, audit?: any) {
     try {
-      return await this.database.client.$transaction(async (tx) => {
+      return await this.database.$transaction(async (tx) => {  // ✅ no .client
         const employee = await tx.user.create({
           data: { ...data, tenantId },
           select: this.employeeSelect(),
@@ -109,10 +110,10 @@ export class EmployeeRepository {
   }
 
   async update(tenantId: string, id: string, data: any, audit?: any) {
-    const existing = await this.findByIdOrThrow(tenantId, id, true);
+    await this.findByIdOrThrow(tenantId, id, true);
 
     try {
-      return await this.database.client.$transaction(async (tx) => {
+      return await this.database.$transaction(async (tx) => {  // ✅ already correct
         const result = await tx.user.updateMany({
           where: { id, tenantId },
           data,
@@ -149,7 +150,7 @@ export class EmployeeRepository {
   async softDelete(tenantId: string, id: string, actorUserId: string) {
     const existing = await this.findByIdOrThrow(tenantId, id);
 
-    return this.database.client.$transaction(async (tx) => {
+    return this.database.$transaction(async (tx) => {  // ✅ no .client
       const deletedAt = new Date();
       const result = await tx.user.updateMany({
         where: { id, tenantId, deletedAt: null },
@@ -189,7 +190,7 @@ export class EmployeeRepository {
       return existing;
     }
 
-    return this.database.client.$transaction(async (tx) => {
+    return this.database.$transaction(async (tx) => {  // ✅ no .client
       const result = await tx.user.updateMany({
         where: { id, tenantId, deletedAt: { not: null } },
         data: {

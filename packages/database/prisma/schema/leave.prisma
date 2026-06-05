@@ -1,21 +1,17 @@
-// Location: packages/database/prisma/schema/leave.prisma
-
 model LeaveRequest {
   id           String   @id @default(uuid()) @db.Uuid
   tenantId     String   @map("tenant_id") @db.Uuid
   employeeId   String   @map("employee_id") @db.Uuid
-  leaveType    String   @map("leave_type") @db.VarChar(50) // "ANNUAL" | "SICK" | "MATERNITY"
+  leaveType    String   @map("leave_type") @db.VarChar(50)
   startDate    DateTime @map("start_date") @db.Date
   endDate      DateTime @map("end_date") @db.Date
-  reason       String?  @db.Text
-  status       String   @default("PENDING") @db.VarChar(20) // "PENDING" | "APPROVED" | "REJECTED"
+  reason       String?
+  status       String   @default("PENDING") @db.VarChar(20)
   approvedById String?  @map("approved_by_id") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  // Relationships
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([employeeId])

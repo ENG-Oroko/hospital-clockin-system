@@ -1,24 +1,16 @@
-// Location: packages/database/prisma/schema/settings.prisma
-
 model SystemSetting {
-  id       String @id @default(uuid()) @db.Uuid
-  tenantId String @unique @map("tenant_id") @db.Uuid
-
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @unique @map("tenant_id") @db.Uuid
   /// Globally assigned attendance rules
   /// Schema: { "halfDayLateMinutes": 60, "autoDeductBreakMinutes": 45 }
-  attendanceRules Json @map("attendance_rules") @db.JsonB
-
+  attendanceRules Json     @map("attendance_rules")
   /// Global calendar indices for public observances (e.g., Madaraka Day, Labour Day)
-  holidayCalendar Json @map("holiday_calendar") @db.JsonB
-
+  holidayCalendar Json     @map("holiday_calendar")
   /// Base hospital payroll rule configurations (e.g., statutory multipliers)
-  salaryRules Json @map("salary_rules") @db.JsonB
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  // Relationships
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salaryRules     Json     @map("salary_rules")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("system_settings")
 }
