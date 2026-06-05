@@ -6,12 +6,10 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { QueueService } from '../queue/queue.service';
-import { Prisma } from '@chronos/database';
-import { AttendanceStatus } from '@chronos/database';
+import { Prisma,AttendanceStatus, AttendanceLog  } from '@chronos/database';
 // Add this import at the top of attendance.service.ts
 //impAttendanceLog } from '@chronos/database';
 // ✅ Correct
-import { AttendanceLog } from '@chronos/database';
 export interface CreateAttendanceLogDto {
   tenantId: string;
   userId: string;

@@ -1,4 +1,7 @@
 -- CreateEnum
+CREATE TYPE "AttendanceStatus" AS ENUM ('PRESENT', 'LATE', 'ABSENT', 'HALF_DAY', 'ON_LEAVE', 'UNROSTERED', 'HOLIDAY');
+
+-- CreateEnum
 CREATE TYPE "UserRole" AS ENUM ('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DEPARTMENT_HEAD', 'STAFF', 'EDGE_GATEWAY');
 
 -- CreateEnum
@@ -25,21 +28,49 @@ CREATE TABLE "attendance_logs" (
     "roster_assignment_id" UUID,
     "direction" VARCHAR(10) NOT NULL,
     "timestamp" TIMESTAMPTZ(6) NOT NULL,
-    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "hardware_uid" INTEGER,
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "summaryId" UUID,
 
     CONSTRAINT "attendance_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "attendance_summary" (
+    "id" UUID NOT NULL,
+    "tenant_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "date" DATE NOT NULL,
+    "firstIn" TIMESTAMPTZ(6),
+    "lastOut" TIMESTAMPTZ(6),
+    "totalHours" REAL,
+    "status" "AttendanceStatus" NOT NULL DEFAULT 'ABSENT',
+    "shift_id" UUID,
+    "shiftName" VARCHAR(100),
+    "scheduledStart" TIMESTAMPTZ(6),
+    "scheduledEnd" TIMESTAMPTZ(6),
+    "scheduledHours" REAL,
+    "lateMinutes" INTEGER NOT NULL DEFAULT 0,
+    "overtimeHours" REAL NOT NULL DEFAULT 0,
+    "processedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reprocessedCount" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "attendance_summary_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "attendance_audits" (
     "id" UUID NOT NULL,
     "tenant_id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
-    "target_log_id" UUID,
-    "action_type" VARCHAR(50) NOT NULL,
+    "userId" UUID NOT NULL,
+    "targetSummaryId" UUID,
+    "targetLogId" UUID,
+    "actionType" VARCHAR(50) NOT NULL,
     "justification" TEXT NOT NULL,
-    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "oldValues" JSONB,
+    "newValues" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "attendance_audits_pkey" PRIMARY KEY ("id")
 );
@@ -323,10 +354,25 @@ CREATE INDEX "attendance_logs_tenant_id_timestamp_idx" ON "attendance_logs"("ten
 CREATE INDEX "attendance_logs_user_id_idx" ON "attendance_logs"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "attendance_logs_tenant_id_device_id_hardware_uid_key" ON "attendance_logs"("tenant_id", "device_id", "hardware_uid");
+CREATE UNIQUE INDEX "attendance_logs_user_id_device_id_direction_timestamp_key" ON "attendance_logs"("user_id", "device_id", "direction", "timestamp");
+
+-- CreateIndex
+CREATE INDEX "attendance_summary_tenant_id_date_idx" ON "attendance_summary"("tenant_id", "date");
+
+-- CreateIndex
+CREATE INDEX "attendance_summary_tenant_id_user_id_date_idx" ON "attendance_summary"("tenant_id", "user_id", "date");
+
+-- CreateIndex
+CREATE INDEX "attendance_summary_status_idx" ON "attendance_summary"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "attendance_summary_user_id_date_key" ON "attendance_summary"("user_id", "date");
 
 -- CreateIndex
 CREATE INDEX "attendance_audits_tenant_id_idx" ON "attendance_audits"("tenant_id");
+
+-- CreateIndex
+CREATE INDEX "attendance_audits_targetSummaryId_idx" ON "attendance_audits"("targetSummaryId");
 
 -- CreateIndex
 CREATE INDEX "departments_tenant_id_idx" ON "departments"("tenant_id");
@@ -437,6 +483,9 @@ CREATE INDEX "employee_audits_tenant_id_employee_id_created_at_idx" ON "employee
 CREATE INDEX "employee_audits_actor_user_id_created_at_idx" ON "employee_audits"("actor_user_id", "created_at");
 
 -- AddForeignKey
+ALTER TABLE "attendance_logs" ADD CONSTRAINT "attendance_logs_summaryId_fkey" FOREIGN KEY ("summaryId") REFERENCES "attendance_summary"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "attendance_logs" ADD CONSTRAINT "attendance_logs_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -449,10 +498,22 @@ ALTER TABLE "attendance_logs" ADD CONSTRAINT "attendance_logs_device_id_fkey" FO
 ALTER TABLE "attendance_logs" ADD CONSTRAINT "attendance_logs_roster_assignment_id_fkey" FOREIGN KEY ("roster_assignment_id") REFERENCES "roster_assignments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "attendance_summary" ADD CONSTRAINT "attendance_summary_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attendance_summary" ADD CONSTRAINT "attendance_summary_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attendance_summary" ADD CONSTRAINT "attendance_summary_shift_id_fkey" FOREIGN KEY ("shift_id") REFERENCES "shift_templates"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "attendance_audits" ADD CONSTRAINT "attendance_audits_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "attendance_audits" ADD CONSTRAINT "attendance_audits_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "attendance_audits" ADD CONSTRAINT "attendance_audits_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attendance_audits" ADD CONSTRAINT "attendance_audits_targetSummaryId_fkey" FOREIGN KEY ("targetSummaryId") REFERENCES "attendance_summary"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "departments" ADD CONSTRAINT "departments_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -20,6 +20,7 @@ model Tenant {
   rosterAssignmentHistories RosterAssignmentHistory[]
   attendanceLogs            AttendanceLog[]
   attendanceAudits          AttendanceAudit[]
+  attendanceSummaries       AttendanceSummary[]
   reconciliationLogs        ReconciliationLog[]
   systemSetting             SystemSetting?
   leaveRequests             LeaveRequest[]

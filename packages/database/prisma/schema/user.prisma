@@ -43,6 +43,7 @@ model User {
   rosterAssignments         RosterAssignment[]
   rosterAssignmentHistories RosterAssignmentHistory[]
   notificationLogs          NotificationLog[]
+  attendanceSummaries       AttendanceSummary[]
 
 
   @@unique([tenantId, email])

@@ -1,49 +1,99 @@
-// Location: packages/database/prisma/schema/attendance.prisma
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+  UNROSTERED
+  HOLIDAY
+}
 
 model AttendanceLog {
-  id                 String   @id @default(uuid()) @db.Uuid
-  tenantId           String   @map("tenant_id") @db.Uuid
-  userId             String   @map("user_id") @db.Uuid
-  deviceId           String   @map("device_id") @db.Uuid
-  rosterAssignmentId String?  @map("roster_assignment_id") @db.Uuid
-  direction          String   @db.VarChar(10)
+  id                 String  @id @default(uuid()) @db.Uuid
+  tenantId           String  @map("tenant_id") @db.Uuid
+  userId             String  @map("user_id") @db.Uuid
+  deviceId           String  @map("device_id") @db.Uuid
+  rosterAssignmentId String? @map("roster_assignment_id") @db.Uuid
 
+  direction String   @db.VarChar(10)
   timestamp DateTime @map("timestamp") @db.Timestamptz(6)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
 
-  /// 🛡️ THE PRODUCTION FIX: Capture the actual incremental sequence counter
-  /// off the ZKTeco local flash storage array (corresponds to 'uid' or 'log_id')
-  hardwareUid Int?     @map("hardware_uid")
+  summaryId String?            @db.Uuid
+  summary   AttendanceSummary? @relation(fields: [summaryId], references: [id], onDelete: SetNull)
 
   tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   device           Device            @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   rosterAssignment RosterAssignment? @relation(fields: [rosterAssignmentId], references: [id], onDelete: SetNull)
 
-  // ❌ DELETED:
-  // @@unique([tenantId, userId, deviceId, direction, timestamp])
-
-  // 🛡️ ENFORCED: True physical uniqueness bounded by the terminal device execution index
-  @@unique([tenantId, deviceId, hardwareUid])
-
+  @@unique([userId, deviceId, direction, timestamp])
   @@index([tenantId, timestamp])
   @@index([userId])
   @@map("attendance_logs")
 }
 
-model AttendanceAudit {
-  id            String   @id @default(uuid()) @db.Uuid
-  tenantId      String   @map("tenant_id") @db.Uuid
-  userId        String   @map("user_id") @db.Uuid // Admin executing the override
-  targetLogId   String?  @map("target_log_id") @db.Uuid
-  actionType    String   @map("action_type") @db.VarChar(50) // "MANUAL_CLOCK" | "OVERRIDE"
-  justification String   @db.Text
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+model AttendanceSummary {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @map("tenant_id") @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  date     DateTime @db.Date
 
-  // Relationships
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstIn    DateTime? @db.Timestamptz(6)
+  lastOut    DateTime? @db.Timestamptz(6)
+  totalHours Float?    @db.Real
+
+  status AttendanceStatus @default(ABSENT)
+
+  shiftId        String?   @map("shift_id") @db.Uuid
+  shiftName      String?   @db.VarChar(100)
+  scheduledStart DateTime? @db.Timestamptz(6)
+  scheduledEnd   DateTime? @db.Timestamptz(6)
+  scheduledHours Float?    @db.Real
+
+  lateMinutes   Int   @default(0)
+  overtimeHours Float @default(0) @db.Real
+
+  processedAt      DateTime @default(now())
+  reprocessedCount Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  attendanceAudits AttendanceAudit[]
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shift            ShiftTemplate?    @relation(fields: [shiftId], references: [id])
+
+  logs AttendanceLog[]
+
+  @@unique([userId, date])
+  @@index([tenantId, date])
+  @@index([tenantId, userId, date])
+  @@index([status])
+  @@map("attendance_summary")
+}
+
+model AttendanceAudit {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  userId   String @db.Uuid
+
+  targetSummaryId String? @db.Uuid
+  targetLogId     String? @db.Uuid
+
+  actionType    String @db.VarChar(50)
+  justification String @db.Text
+
+  oldValues Json?
+  newValues Json?
+
+  createdAt DateTime @default(now())
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attendanceSummary AttendanceSummary? @relation(fields: [targetSummaryId], references: [id])
 
   @@index([tenantId])
+  @@index([targetSummaryId])
   @@map("attendance_audits")
 }

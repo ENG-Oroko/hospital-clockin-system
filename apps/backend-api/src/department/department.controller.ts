@@ -9,81 +9,83 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-
 import { DepartmentService } from './department.service';
+import { HierarchyRegistryService } from './service/hierarchy-registry.service';
+import { CostCenterMapperService } from './service/cost-center-mapper.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
-import { AssignDepartmentMemberDto } from './dto/assign-department-member.dto';
 
 @Controller('departments')
 export class DepartmentController {
-  constructor(private readonly departmentService: DepartmentService) {}
+  constructor(
+    private readonly departmentService: DepartmentService,
+    private readonly hierarchyRegistry: HierarchyRegistryService,
+    private readonly costCenterMapper: CostCenterMapperService,
+  ) {}
 
-  // CREATE
+  // ========== BASIC CRUD ==========
   @Post()
-  createDepartment(@Body() dto: CreateDepartmentDto, @Req() req: any) {
+  create(@Body() dto: CreateDepartmentDto, @Req() req: any) {
     return this.departmentService.create(dto, req.user.tenantId);
   }
 
-  // LIST
   @Get()
-  listDepartments(@Req() req: any) {
-    return this.departmentService.listDepartments(req.user.tenantId);
+  findAll(@Req() req: any) {
+    return this.departmentService.findAll(req.user.tenantId);
   }
 
-  // UPDATE
+  @Get(':id')
+  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.departmentService.findOne(id, req.user.tenantId);
+  }
+
   @Patch(':id')
-  updateDepartment(
-    @Param('id', ParseUUIDPipe) departmentId: string,
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateDepartmentDto,
     @Req() req: any,
   ) {
-    return this.departmentService.updateDepartment(
-      departmentId,
-      dto,
-      req.user.tenantId,
-    );
+    return this.departmentService.update(id, dto, req.user.tenantId);
   }
 
-  // DELETE
   @Delete(':id')
-  deleteDepartment(
-    @Param('id', ParseUUIDPipe) departmentId: string,
+  delete(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.departmentService.delete(id, req.user.tenantId);
+  }
+
+  // ========== HIERARCHY REGISTRY (PDF Requirement) ==========
+  @Get('hierarchy/tree')
+  getHierarchy(@Req() req: any) {
+    return this.hierarchyRegistry.getHierarchy(req.user.tenantId);
+  }
+
+  @Get('hierarchy/roots')
+  getRootDepartments(@Req() req: any) {
+    return this.hierarchyRegistry.getRootDepartments(req.user.tenantId);
+  }
+
+  @Get(':id/children')
+  getChildren(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.hierarchyRegistry.getChildren(id, req.user.tenantId);
+  }
+
+  // ========== COST CENTER MAPPER (PDF Requirement) ==========
+  @Get(':id/cost-center')
+  getCostCenter(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.costCenterMapper.getCostCenterCode(id, req.user.tenantId);
+  }
+
+  @Patch(':id/cost-center')
+  updateCostCenter(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('costCenterCode') costCenterCode: string,
     @Req() req: any,
   ) {
-    return this.departmentService.deleteDepartment(
-      departmentId,
-      req.user.tenantId,
-    );
+    return this.costCenterMapper.updateCostCenterCode(id, costCenterCode, req.user.tenantId);
   }
 
-  // ASSIGN HEAD (HOD)
-  @Post(':id/head')
-  assignHead(
-    @Param('id', ParseUUIDPipe) departmentId: string,
-    @Body() body: AssignDepartmentMemberDto,
-  ) {
-    return this.departmentService.assignDepartmentHead(
-      departmentId,
-      body.userId,
-    );
-  }
-
-  // ASSIGN STAFF
-  @Post(':id/staff')
-  assignStaff(
-    @Param('id', ParseUUIDPipe) departmentId: string,
-    @Body() body: AssignDepartmentMemberDto,
-  ) {
-    return this.departmentService.assignDepartmentStaff(
-      departmentId,
-      body.userId,
-    );
-  }
-
-  // LIST STAFF
-  @Get(':id/staff')
-  listStaff(@Param('id', ParseUUIDPipe) departmentId: string) {
-    return this.departmentService.listDepartmentStaff(departmentId);
+  @Get('cost-centers/all')
+  getAllCostCenters(@Req() req: any) {
+    return this.costCenterMapper.getAllCostCenters(req.user.tenantId);
   }
 }

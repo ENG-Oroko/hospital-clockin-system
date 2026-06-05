@@ -1,23 +1,33 @@
 import {
-	IsNotEmpty,
-	IsOptional,
-	IsString,
-	IsObject,
-	Length,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsObject,
+  Length,
+  IsUUID,
 } from 'class-validator';
 
-export class CreateDepartmentDto{
-	@IsString()
-	@IsNotEmpty()
-	@Length(2, 100)
-	name!: string;
+export class CreateDepartmentDto {
+  @IsString()
+  @IsNotEmpty()
+  @Length(2, 100)
+  name!: string;
 
-	@IsString()
-    @IsNotEmpty()
-	@Length(2, 20)
-	code!: string;
+  @IsString()
+  @IsNotEmpty()
+  @Length(2, 20)
+  code!: string;
 
-	@IsOptional()
-	@IsObject()
-	rules?: Record<string, any>;
+  @IsOptional()
+  @IsUUID()
+  parentId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 50)
+  costCenterCode?: string;
+
+  @IsOptional()
+  @IsObject()
+  rules?: Record<string, any>;
 }
