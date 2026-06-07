@@ -1,11 +1,11 @@
 {
   "name": "@chronos/database",
   "version": "1.0.0",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
   "private": true,
   "files": [
-    "dist"
+    "src"
   ],
   "scripts": {
     "build": "tsc",

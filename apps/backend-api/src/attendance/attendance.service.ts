@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { AttendanceLog } from '@chronos/database';
-import { EmployeeService } from '../employee/employee.service';
-import { RosterService } from '../roster/roster.service';
+import { AttendanceLog, Prisma } from '@chronos/database';
 import { PrismaService } from '../database/prisma.service';
+import { EmployeeService } from '../employee/employee.service';
+import { QueueService } from '../queue/queue.service';
+import { RosterService } from '../roster/roster.service';
 
 export interface CreateAttendanceLogDto {
   tenantId: string;
@@ -31,6 +32,7 @@ export class AttendanceService {
     private readonly db: PrismaService,
     private readonly employeeService: EmployeeService,
     private readonly rosterService: RosterService,
+    private readonly queue: QueueService,
   ) {}
 
   async ingestLog(data: CreateAttendanceLogDto) {
@@ -49,30 +51,45 @@ export class AttendanceService {
       ? await this.rosterService.getAssignmentSnapshot(data.tenantId, data.rosterAssignmentId)
       : await this.rosterService.getActiveAssignmentForUserDate(data.tenantId, employee.id, punchDate);
 
-    const log = await this.db.attendanceLog.upsert({
-      where: {
-        userId_deviceId_direction_timestamp: {
+    try {
+      const log = await this.db.attendanceLog.upsert({
+        where: {
+          userId_deviceId_direction_timestamp: {
+            userId: employee.id,
+            deviceId: data.deviceId,
+            direction: data.direction,
+            timestamp: data.timestamp,
+          },
+        },
+        update: {
+          rosterAssignmentId: assignment?.id ?? data.rosterAssignmentId ?? null,
+        },
+        create: {
+          tenantId: data.tenantId,
           userId: employee.id,
           deviceId: data.deviceId,
           direction: data.direction,
           timestamp: data.timestamp,
+          rosterAssignmentId: assignment?.id ?? data.rosterAssignmentId ?? null,
         },
-      },
-      update: {
-        rosterAssignmentId: assignment?.id ?? data.rosterAssignmentId ?? null,
-      },
-      create: {
+      });
+
+      await this.queue.addAttendanceJob({
         tenantId: data.tenantId,
         userId: employee.id,
-        deviceId: data.deviceId,
-        direction: data.direction,
-        timestamp: data.timestamp,
-        rosterAssignmentId: assignment?.id ?? data.rosterAssignmentId ?? null,
-      },
-    });
+        date: punchDate.toISOString().slice(0, 10),
+        attendanceLogId: log.id,
+        deviceSerialNumber: data.deviceId,
+        processingMode: 'realtime',
+        createdAt: new Date().toISOString(),
+      });
 
-    this.logger.debug(`Ingested raw attendance log ${log.id} for employee ${employee.id}`);
-    return log;
+      this.logger.debug(`Ingested raw attendance log ${log.id} for employee ${employee.id}`);
+      return log;
+    } catch (error) {
+      this.logger.error(`Failed to ingest attendance log: ${error instanceof Error ? error.message : error}`);
+      throw error;
+    }
   }
 
   async bulkIngest(logs: CreateAttendanceLogDto[]) {
@@ -82,17 +99,25 @@ export class AttendanceService {
       errors: [] as Array<{ log: CreateAttendanceLogDto; error: string }>,
     };
 
-    for (const log of logs) {
-      try {
-        await this.ingestLog(log);
-        results.success++;
-      } catch (error) {
-        results.failed++;
-        results.errors.push({
-          log,
-          error: error instanceof Error ? error.message : 'Unknown ingestion error',
-        });
-      }
+    const batchSize = 100;
+
+    for (let i = 0; i < logs.length; i += batchSize) {
+      const batch = logs.slice(i, i + batchSize);
+
+      await Promise.allSettled(
+        batch.map(async (log) => {
+          try {
+            await this.ingestLog(log);
+            results.success++;
+          } catch (error) {
+            results.failed++;
+            results.errors.push({
+              log,
+              error: error instanceof Error ? error.message : 'Unknown ingestion error',
+            });
+          }
+        }),
+      );
     }
 
     return results;
@@ -138,7 +163,7 @@ export class AttendanceService {
   private rawLogWhere(
     tenantId: string,
     filters: { userId?: string; startDate?: Date; endDate?: Date; direction?: string },
-  ) {
+  ): Prisma.AttendanceLogWhereInput {
     return {
       tenantId,
       ...(filters.userId ? { userId: filters.userId } : {}),

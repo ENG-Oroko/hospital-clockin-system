@@ -1,24 +1,27 @@
 // Location: packages/database/prisma/schema/department.prisma
 
 model Department {
-  id       String @id @default(uuid()) @db.Uuid
-  tenantId String @map("tenant_id") @db.Uuid
-  name     String @db.VarChar(100) // e.g., "Intensive Care Unit"
-  code     String @db.VarChar(20) // e.g., "ICU"
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  name            String   @db.VarChar(100)
+  code            String   @db.VarChar(20)
+  parentId        String?  @map("parent_id") @db.Uuid
+  costCenterCode  String?  @map("cost_center_code") @db.VarChar(50)
+  rules           Json     @default("{}") @map("rules") @db.JsonB
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  /// Dynamic departmental-level operational rule sets (e.g., specific grace periods, break rules)
-  /// Structure: { "gracePeriodMinutes": 0, "autoDeductBreakMinutes": 30 }
-  rules Json @default("{}") @map("rules") @db.JsonB
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  // Relationships
-  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  users             User[] // Clinicians historically home-contracted to this department
-  rosterAssignments RosterAssignment[] // Assignments run here (including floating staff logs)
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  
+  parent          Department?  @relation("parent_children", fields: [parentId], references: [id])
+  children        Department[] @relation("parent_children")
+  
+  users           User[]
+  rosterAssignments RosterAssignment[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
+  @@index([parentId])
   @@map("departments")
 }
