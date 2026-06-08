@@ -1,13 +1,17 @@
-// src/attendance/attendance.service.ts
 import {
   Injectable,
   Logger,
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';  // ← Changed from DatabaseService
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PrismaService } from '../database/prisma.service';
 import { QueueService } from '../queue/queue.service';
-import { Prisma, AttendanceStatus, AttendanceLog } from '@chronos/database';
+import { AttendanceStatus, AttendanceLog } from '@chronos/database';
+
+// ADDED: EventEmitter2 injection replaces the old NotificationsModule import.
+// AttendanceService now fires events onto the bus; NotificationListener
+// in NotificationsModule catches them. This breaks the circular dependency.
 
 export interface CreateAttendanceLogDto {
   tenantId: string;
@@ -34,13 +38,14 @@ export class AttendanceService {
   private readonly logger = new Logger(AttendanceService.name);
 
   constructor(
-    private readonly db: PrismaService,  // ← Changed from DatabaseService
+    private readonly db: PrismaService,
     private readonly queue: QueueService,
+    private readonly eventEmitter: EventEmitter2, // ADDED
   ) {}
 
   async ingestLog(data: CreateAttendanceLogDto) {
     try {
-      const user = await this.db.client.user.findFirst({  // ← Note: use .client
+      const user = await this.db.user.findFirst({
         where: {
           id: data.userId,
           tenantId: data.tenantId,
@@ -52,7 +57,7 @@ export class AttendanceService {
         throw new BadRequestException('Invalid user or user not active');
       }
 
-      const log = await this.db.client.attendanceLog.upsert({  // ← use .client
+      const log = await this.db.attendanceLog.upsert({
         where: {
           userId_deviceId_direction_timestamp: {
             userId: data.userId,
@@ -79,7 +84,26 @@ export class AttendanceService {
         createdAt: new Date().toISOString(),
         attendanceLogId: log.id,
       });
-      
+
+      // CHANGED: was calling NotificationsService directly.
+      // Now emits an event — NotificationListener handles the rest.
+      if (data.direction === 'IN') {
+        this.eventEmitter.emit('attendance.clock-in.completed', {
+          tenantId: data.tenantId,
+          userId: data.userId,
+          attendanceRecordId: log.id,
+          actualClockInTime: data.timestamp,
+          shiftDate: data.timestamp,
+        });
+      } else {
+        this.eventEmitter.emit('attendance.clock-out.completed', {
+          tenantId: data.tenantId,
+          userId: data.userId,
+          attendanceRecordId: log.id,
+          actualClockOutTime: data.timestamp,
+          shiftDate: data.timestamp,
+        });
+      }
 
       this.logger.debug(`Ingested log ${log.id} for user ${data.userId}`);
       return log;
@@ -90,17 +114,11 @@ export class AttendanceService {
   }
 
   async bulkIngest(logs: CreateAttendanceLogDto[]) {
-    const results = {
-      success: 0,
-      failed: 0,
-      errors: [] as any[],
-    };
-
+    const results = { success: 0, failed: 0, errors: [] as any[] };
     const batchSize = 100;
 
     for (let i = 0; i < logs.length; i += batchSize) {
       const batch = logs.slice(i, i + batchSize);
-
       await Promise.allSettled(
         batch.map(async (log) => {
           try {
@@ -119,14 +137,8 @@ export class AttendanceService {
 
   async getSummaries(filters: AttendanceSummaryFilters) {
     const {
-      tenantId,
-      userId,
-      startDate,
-      endDate,
-      status,
-      departmentId,
-      page = 1,
-      limit = 50,
+      tenantId, userId, startDate, endDate, status,
+      departmentId, page = 1, limit = 50,
     } = filters;
 
     const where: any = {
@@ -138,7 +150,7 @@ export class AttendanceService {
     };
 
     if (departmentId) {
-      const users = await this.db.client.user.findMany({  // ← use .client
+      const users = await this.db.user.findMany({
         where: { tenantId, departmentId },
         select: { id: true },
       });
@@ -146,71 +158,41 @@ export class AttendanceService {
     }
 
     const [summaries, total] = await Promise.all([
-      this.db.client.attendanceSummary.findMany({  // ← use .client
+      this.db.attendanceSummary.findMany({
         where,
         include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              departmentId: true,
-            },
-          },
-          shift: {
-            select: {
-              id: true,
-              name: true,
-              startTime: true,
-            },
-          },
+          user: { select: { id: true, firstName: true, lastName: true, email: true, departmentId: true } },
+          shift: { select: { id: true, name: true, startTime: true } },
         },
         orderBy: { date: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.db.client.attendanceSummary.count({ where }),  // ← use .client
+      this.db.attendanceSummary.count({ where }),
     ]);
 
     return {
       data: summaries,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
 
   async getDailyBreakdown(tenantId: string, date: Date) {
     const startDate = new Date(date);
     startDate.setHours(0, 0, 0, 0);
-
     const endDate = new Date(date);
     endDate.setHours(23, 59, 59, 999);
 
-    return this.db.client.attendanceSummary.findMany({  // ← use .client
-      where: {
-        tenantId,
-        date: { gte: startDate, lte: endDate },
-      },
+    return this.db.attendanceSummary.findMany({
+      where: { tenantId, date: { gte: startDate, lte: endDate } },
       include: {
         user: {
           select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            payrollNumber: true,
-            department: {
-              select: { id: true, name: true },
-            },
+            id: true, firstName: true, lastName: true, payrollNumber: true,
+            department: { select: { id: true, name: true } },
           },
         },
-        logs: {
-          orderBy: { timestamp: 'asc' },
-        },
+        logs: { orderBy: { timestamp: 'asc' } },
       },
     });
   }
@@ -229,18 +211,15 @@ export class AttendanceService {
       justification: string;
     },
   ) {
-    // Remove .client - use this.db directly
     const existing = await this.db.attendanceSummary.findUnique({
       where: { id: summaryId },
     });
-  
+
     if (!existing || existing.tenantId !== tenantId) {
       throw new NotFoundException('Attendance summary not found');
     }
-  
-    // ✅ FIXED: Complete transaction with both operations
+
     const results = await this.db.$transaction([
-      // Operation 1: Update the summary
       this.db.attendanceSummary.update({
         where: { id: summaryId },
         data: {
@@ -254,8 +233,6 @@ export class AttendanceService {
           reprocessedCount: { increment: 1 },
         },
       }),
-      
-      // Operation 2: Create audit record
       this.db.attendanceAudit.create({
         data: {
           tenantId,
@@ -273,65 +250,50 @@ export class AttendanceService {
         },
       }),
     ]);
-  
-    const updated = results[0]; // First result is the updated summary
-    const audit = results[1];   // Second result is the audit record
-  
+
+    // Emit override event so notifications module can alert the employee
+    this.eventEmitter.emit('timecard.edited', {
+      tenantId,
+      userId: existing.userId,
+      attendanceRecordId: summaryId,
+      shiftDate: existing.date,
+      editedBy: adminUserId,
+      editedByName: 'Admin',
+      changes: data,
+    });
+
     this.logger.warn(`Manual override on ${summaryId} by ${adminUserId}`);
-    return updated;
+    return results[0];
   }
 
-  async getAuditTrail(
-    tenantId: string,
-    summaryId: string,
-  ): Promise<any[]> {
-    return this.db.client.attendanceAudit.findMany({  // ← use .client
-      where: {
-        tenantId,
-        targetSummaryId: summaryId,
-      },
+  async getAuditTrail(tenantId: string, summaryId: string): Promise<any[]> {
+    return this.db.attendanceAudit.findMany({
+      where: { tenantId, targetSummaryId: summaryId },
       include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async recalculateRange(
-    tenantId: string,
-    startDate: Date,
-    endDate: Date,
-    userId?: string,
-  ) {
-    const where: any = {
-      tenantId,
-      date: { gte: startDate, lte: endDate },
-    };
-
+  async recalculateRange(tenantId: string, startDate: Date, endDate: Date, userId?: string) {
+    const where: any = { tenantId, date: { gte: startDate, lte: endDate } };
     if (userId) where.userId = userId;
 
-    const summaries = await this.db.client.attendanceSummary.findMany({  // ← use .client
+    const summaries = await this.db.attendanceSummary.findMany({
       where,
       select: { id: true, userId: true, date: true },
     });
- 
 
     for (const summary of summaries) {
       await this.queue.addAttendanceJob({
-        tenantId: tenantId,
+        tenantId,
         userId: summary.userId,
         date: summary.date,
         createdAt: new Date().toISOString(),
         attendanceLogId: summary.id,
         correlationId: `reprocess-${summary.id}`,
-      }, 3); // Priority 3 for reprocess
+      }, 3);
     }
 
     return { queued: summaries.length };
@@ -352,17 +314,14 @@ export class AttendanceService {
     };
 
     const [logs, total] = await Promise.all([
-      this.db.client.attendanceLog.findMany({  // ← use .client
+      this.db.attendanceLog.findMany({
         where,
-        include: {
-          user: true,
-          device: true,
-        },
+        include: { user: true, device: true },
         orderBy: { timestamp: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.db.client.attendanceLog.count({ where }),  // ← use .client
+      this.db.attendanceLog.count({ where }),
     ]);
 
     return { data: logs, total, page, limit };
@@ -371,45 +330,16 @@ export class AttendanceService {
   async getDashboardStats(tenantId: string, date: Date) {
     const startDate = new Date(date);
     startDate.setHours(0, 0, 0, 0);
-
     const endDate = new Date(date);
     endDate.setHours(23, 59, 59, 999);
 
-    const stats = await this.db.client.$transaction([  // ← use .client
-      this.db.client.attendanceSummary.count({  // ← use .client
-        where: { tenantId, date: { gte: startDate, lte: endDate } },
-      }),
-      this.db.client.attendanceSummary.count({  // ← use .client
-        where: {
-          tenantId,
-          date: { gte: startDate, lte: endDate },
-          status: 'PRESENT',
-        },
-      }),
-      this.db.client.attendanceSummary.count({  // ← use .client
-        where: {
-          tenantId,
-          date: { gte: startDate, lte: endDate },
-          lateMinutes: { gt: 0 },
-        },
-      }),
-      this.db.client.attendanceSummary.count({  // ← use .client
-        where: {
-          tenantId,
-          date: { gte: startDate, lte: endDate },
-          status: 'ABSENT',
-        },
-      }),
-      this.db.client.attendanceSummary.count({  // ← use .client
-        where: {
-          tenantId,
-          date: { gte: startDate, lte: endDate },
-          status: 'ON_LEAVE',
-        },
-      }),
-      this.db.client.user.count({  // ← use .client
-        where: { tenantId, isActive: true },
-      }),
+    const stats = await this.db.$transaction([
+      this.db.attendanceSummary.count({ where: { tenantId, date: { gte: startDate, lte: endDate } } }),
+      this.db.attendanceSummary.count({ where: { tenantId, date: { gte: startDate, lte: endDate }, status: 'PRESENT' } }),
+      this.db.attendanceSummary.count({ where: { tenantId, date: { gte: startDate, lte: endDate }, lateMinutes: { gt: 0 } } }),
+      this.db.attendanceSummary.count({ where: { tenantId, date: { gte: startDate, lte: endDate }, status: 'ABSENT' } }),
+      this.db.attendanceSummary.count({ where: { tenantId, date: { gte: startDate, lte: endDate }, status: 'ON_LEAVE' } }),
+      this.db.user.count({ where: { tenantId, isActive: true } }),
     ]);
 
     return {
@@ -420,8 +350,7 @@ export class AttendanceService {
       absent: stats[3],
       onLeave: stats[4],
       totalEmployees: stats[5],
-      attendanceRate:
-        stats[5] > 0 ? (stats[1] / stats[5]) * 100 : 0,
+      attendanceRate: stats[5] > 0 ? (stats[1] / stats[5]) * 100 : 0,
     };
   }
 }

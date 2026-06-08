@@ -15,27 +15,26 @@ import { Logger } from '@nestjs/common';
     origin: true,
     credentials: true,
   },
-  namespace: 'notifications',
+  namespace: 'attendance',
 })
-export class NotificationGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  private readonly logger = new Logger(NotificationGateway.name);
-  private connectedUsers = new Map<string, string[]>(); // tenantId -> socketIds[]
-  private userSockets = new Map<string, string>(); // userId -> socketId
+  private readonly logger = new Logger(AttendanceGateway.name);
+  private userSockets = new Map<string, string>();
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
     client.emit('connected', {
-      message: 'Connected to notification gateway',
+      message: 'Connected to attendance gateway',
       timestamp: new Date(),
+      socketId: client.id,
     });
   }
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
-    // Clean up disconnected user
     for (const [userId, socketId] of this.userSockets.entries()) {
       if (socketId === client.id) {
         this.userSockets.delete(userId);
@@ -44,57 +43,58 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
     }
   }
 
+  @SubscribeMessage('ping')
+  handlePing(@ConnectedSocket() client: Socket) {
+    client.emit('pong', { timestamp: new Date() });
+    return { event: 'pong', data: 'pong' };
+  }
+
   @SubscribeMessage('register')
-  handleRegister(
+  handleRegister(@ConnectedSocket() client: Socket, @MessageBody() data: { userId: string }) {
+    if (data.userId) {
+      this.userSockets.set(data.userId, client.id);
+      client.join(`user:${data.userId}`);
+      client.emit('registered', { userId: data.userId, success: true });
+      this.logger.log(`User ${data.userId} registered`);
+    }
+  }
+
+  @SubscribeMessage('subscribe:attendance')
+  handleSubscribeAttendance(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { userId: string; tenantId: string }
   ) {
     if (data.userId) {
-      this.userSockets.set(data.userId, client.id);
-      client.join(`user:${data.userId}`);
+      client.join(`attendance:${data.userId}`);
+    }
+    if (data.tenantId) {
       client.join(`tenant:${data.tenantId}`);
-      
-      client.emit('registered', {
-        userId: data.userId,
-        tenantId: data.tenantId,
-        success: true,
-      });
-      
-      this.logger.log(`User ${data.userId} registered for notifications`);
     }
-  }
-
-  @SubscribeMessage('subscribe:notifications')
-  handleSubscribeNotifications(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { userId: string }
-  ) {
-    if (data.userId) {
-      client.join(`notifications:${data.userId}`);
-      client.emit('subscribed', {
-        channel: `notifications:${data.userId}`,
-        success: true,
-      });
-    }
-  }
-
-  // Emit real-time notification to user
-  notifyUser(userId: string, notification: any) {
-    this.server.to(`user:${userId}`).emit('notification', {
-      ...notification,
-      timestamp: new Date(),
+    client.emit('subscribed', { 
+      userId: data.userId, 
+      tenantId: data.tenantId,
+      success: true 
     });
-    
-    this.server.to(`notifications:${userId}`).emit('new_notification', {
-      ...notification,
+  }
+
+  // Emit methods for services
+  notifyUser(userId: string, event: string, payload: any) {
+    this.server.to(`user:${userId}`).emit(event, {
+      ...payload,
       timestamp: new Date(),
     });
   }
 
-  // Emit to all users in a tenant
-  notifyTenant(tenantId: string, event: string, data: any) {
+  notifyTenant(tenantId: string, event: string, payload: any) {
     this.server.to(`tenant:${tenantId}`).emit(event, {
-      ...data,
+      ...payload,
+      timestamp: new Date(),
+    });
+  }
+
+  notifyAttendanceEvent(userId: string, event: string, payload: any) {
+    this.server.to(`attendance:${userId}`).emit(event, {
+      ...payload,
       timestamp: new Date(),
     });
   }

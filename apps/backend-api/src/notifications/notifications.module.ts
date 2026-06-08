@@ -1,39 +1,39 @@
-// notifications/notifications.module.ts
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bull';
+
+// Core services
 import { NotificationsService } from './services/notification.service';
-import { NotificationsController } from './notifications.controller'; // Simplified controller
-import { NotificationController } from './controllers/notification.controller'; // Comprehensive controller
-import { PrismaService } from '../database/prisma.service';
-import { WebsocketModule } from '../websocket/websocket.module';
-import { NotificationGateway } from '../websocket/notification.gateway';
-
-// Attendance helpers
-import { AttendanceCalculator } from '../attendance/helpers/attendance-calculator';
-import { OvertimeCalculator } from '../attendance/helpers/overtime-calculator';
-import { TimeUtils } from '../attendance/helpers/time-utils';
-
-// Notification services
 import { DispatcherService } from './services/dispatcher.service';
 import { RendererService } from './services/renderer.service';
 import { PreferenceService } from './services/preference.service';
 
-// Notification channels
+// Controllers
+import { NotificationsController } from './notifications.controller';
+import { NotificationController } from './controllers/notification.controller';
+
+// Channels
 import { InAppChannel } from './channels/in-app.channel';
 import { EmailChannel } from './channels/email.channel';
 import { SmsChannel } from './channels/sms.channel';
 
-// Notification rules
+// Rules
 import { LateInRule } from './rules/late-in.rule';
 import { MissedPunchRule } from './rules/missed-punch.rule';
 import { OvertimeRule } from './rules/overtime.rule';
 
-// Notification listeners
+// Listeners
 import { NotificationListener } from './listeners/notification.listener';
 
-// middleware
-import {   
+// Repositories
+import { NotificationRepository } from './repositories/notification.repository';
+import { PreferenceRepository } from './repositories/preference.repository';
+
+// Jobs
+import { RetryFailedJob } from './jobs/retry-failed.job';
+
+// Middleware
+import {
   NotificationRequestMiddleware,
   NotificationRateLimitMiddleware,
   NotificationAuthMiddleware,
@@ -42,17 +42,19 @@ import {
   NotificationSecurityMiddleware,
   NotificationUserContextMiddleware,
   NotificationCompressionMiddleware,
-  NotificationIdempotencyMiddleware, 
+  NotificationIdempotencyMiddleware,
 } from './middlewares/notification.middleware';
 
-// Notification repositories
-import { NotificationRepository } from './repositories/notification.repository';
-import { PreferenceRepository } from './repositories/preference.repository';
-import { RetryFailedJob } from './jobs/retry-failed.job';
+
+
+import { SettingsModule } from '../settings/settings.module';
+import { TenantModule } from '../tenant/tenant.module';
 
 @Module({
   imports: [
-    WebsocketModule,
+    // EventEmitter is the decoupling layer between AttendanceModule and
+    // NotificationsModule. AttendanceService emits events, NotificationListener
+    // catches them here — no circular import needed.
     EventEmitterModule.forRoot({
       wildcard: false,
       delimiter: '.',
@@ -62,13 +64,12 @@ import { RetryFailedJob } from './jobs/retry-failed.job';
       verboseMemoryLeak: false,
       ignoreErrors: false,
     }),
+
+    // Redis config comes from BullModule.forRoot() in AppModule.
+    // Never put redis: {} here — it duplicates config and can connect
+    // to a different Redis instance than the rest of the app.
     BullModule.registerQueue({
       name: 'notifications',
-      redis: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT) || 6379,
-        password: process.env.REDIS_PASSWORD,
-      },
       defaultJobOptions: {
         attempts: 3,
         backoff: {
@@ -79,44 +80,42 @@ import { RetryFailedJob } from './jobs/retry-failed.job';
         removeOnFail: 500,
       },
     }),
+
+    // Needed by PreferenceService to enforce DND / quiet hours per org
+    SettingsModule,
+    TenantModule,
   ],
+
   controllers: [
-    NotificationsController,  // Simplified controller (existing)
-    NotificationController     // Comprehensive controller (new)
+    NotificationsController,
+    NotificationController,
   ],
+
   providers: [
-    // Database
-    PrismaService,
-    
-    // Attendance helpers
-    AttendanceCalculator,
-    OvertimeCalculator,
-    TimeUtils,
-    
     // Repositories
     NotificationRepository,
     PreferenceRepository,
-    
+
     // Channels
     InAppChannel,
     EmailChannel,
     SmsChannel,
 
-    // jobs
+    // Jobs
     RetryFailedJob,
-    
+
     // Services
     DispatcherService,
     RendererService,
     PreferenceService,
-    NotificationsService, // Root service
-    
+    NotificationsService,
+
     // Rules
     LateInRule,
     MissedPunchRule,
     OvertimeRule,
 
-    // middleware
+    // Middleware
     NotificationRequestMiddleware,
     NotificationRateLimitMiddleware,
     NotificationAuthMiddleware,
@@ -127,19 +126,27 @@ import { RetryFailedJob } from './jobs/retry-failed.job';
     NotificationCompressionMiddleware,
     NotificationIdempotencyMiddleware,
 
-    // Listeners
+    // Listeners — catches EventEmitter events from AttendanceModule,
+    // RosterModule, etc. and routes them to DispatcherService
     NotificationListener,
-    
-    // WebSocket
-    NotificationGateway,
+
+    // NOTE: NotificationGateway has been moved to WebsocketModule.
+    // It was listed here AND imported from WebsocketModule simultaneously,
+    // which creates a duplicate provider conflict.
   ],
+
   exports: [
+    // Exported so WebsocketModule can push via DispatcherService
     DispatcherService,
+    NotificationsService,
     PreferenceService,
+
+    // Exported so AttendanceModule can reference rule types if needed
+    // (but AttendanceModule should NOT import NotificationsModule —
+    //  it should emit events instead)
     LateInRule,
     MissedPunchRule,
     OvertimeRule,
-    NotificationsService,
   ],
 })
 export class NotificationsModule {}
