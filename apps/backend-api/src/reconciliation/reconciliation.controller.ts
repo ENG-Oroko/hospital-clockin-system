@@ -1,40 +1,199 @@
-import { Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { UserRole } from '@chronos/types-common';
+import { CurrentUser } from '../common/auth/current-user.decorator';
+import type { AuthenticatedUser } from '../common/auth/authenticated-user';
 import { JwtAuthGuard } from '../common/auth/jwt-auth.guard';
 import { Roles } from '../common/auth/roles.decorator';
 import { RolesGuard } from '../common/auth/roles.guard';
+import { TenantId } from '../common/tenant/tenant-id.decorator';
+import { QueueService } from '../queue/queue.service';
+import {
+  ReconciliationApprovalDTO,
+  ReconciliationOverrideDTO,
+  ReconciliationRequestDTO,
+  ReprocessReconciliationDTO,
+} from './dto/reconciliation.dto';
 import { ReconciliationService } from './reconciliation.service';
 
 @Controller('reconciliation')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReconciliationController {
-  constructor(private readonly reconciliationService: ReconciliationService) {}
+  constructor(
+    private readonly reconciliationService: ReconciliationService,
+    private readonly queueService: QueueService,
+  ) {}
+
+  @Post('run')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
+  runReconciliation(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: ReconciliationRequestDTO,
+  ) {
+    if (body.assignmentId) {
+      return this.reconciliationService.reconcileAssignmentById(tenantId, body.assignmentId, {
+        actorUserId: user.userId,
+        reason: body.reason,
+      });
+    }
+
+    if (body.employeeId && body.date) {
+      return this.reconciliationService.reconcileUserDate(tenantId, body.employeeId, body.date, {
+        actorUserId: user.userId,
+        reason: body.reason,
+      });
+    }
+
+    if (body.departmentId && body.date) {
+      return this.reconciliationService.reconcileDepartmentDate(tenantId, body.departmentId, body.date, {
+        actorUserId: user.userId,
+        reason: body.reason,
+      });
+    }
+
+    return this.reconciliationService.reconcileDateRange(
+      tenantId,
+      body.startDate ?? body.date ?? new Date(),
+      body.endDate ?? body.startDate ?? body.date ?? new Date(),
+      {
+        actorUserId: user.userId,
+        reason: body.reason,
+        employeeId: body.employeeId,
+        departmentId: body.departmentId,
+      },
+    );
+  }
+
+  @Post('queue')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
+  queueReconciliation(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: ReconciliationRequestDTO,
+  ) {
+    return this.queueService.addAttendanceBatchReconcileJob({
+      tenantId,
+      employeeId: body.employeeId,
+      departmentId: body.departmentId,
+      startDate: body.startDate ?? body.date ?? new Date().toISOString().slice(0, 10),
+      endDate: body.endDate ?? body.startDate ?? body.date ?? new Date().toISOString().slice(0, 10),
+      triggeredByUserId: user.userId,
+      createdAt: new Date().toISOString(),
+    });
+  }
 
   @Post('employees/:employeeId/dates/:date')
   @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
-  reconcileUserDate(@Param('employeeId') employeeId: string, @Param('date') date: string, @Req() req: any) {
-    return this.reconciliationService.reconcileUserDate(req.user.tenantId, employeeId, date);
+  reconcileEmployee(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('employeeId') employeeId: string,
+    @Param('date') date: string,
+  ) {
+    return this.reconciliationService.reconcileUserDate(tenantId, employeeId, date, {
+      actorUserId: user.userId,
+      reason: 'Manual employee reconciliation',
+    });
+  }
+
+  @Post('date-range')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
+  reconcileDateRange(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: ReconciliationRequestDTO,
+  ) {
+    return this.reconciliationService.reconcileDateRange(tenantId, body.startDate ?? new Date(), body.endDate ?? body.startDate ?? new Date(), {
+      actorUserId: user.userId,
+      reason: body.reason,
+      employeeId: body.employeeId,
+      departmentId: body.departmentId,
+    });
   }
 
   @Post('assignments/:assignmentId')
   @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
-  reconcileAssignment(@Param('assignmentId') assignmentId: string, @Req() req: any) {
-    return this.reconciliationService.reconcileAssignmentById(req.user.tenantId, assignmentId);
+  reconcileAssignment(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    return this.reconciliationService.reconcileAssignmentById(tenantId, assignmentId, {
+      actorUserId: user.userId,
+      reason: 'Manual assignment reconciliation',
+    });
   }
 
   @Post('departments/:departmentId/dates/:date')
   @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
-  reconcileDepartmentDate(@Param('departmentId') departmentId: string, @Param('date') date: string, @Req() req: any) {
-    return this.reconciliationService.reconcileDepartmentDate(req.user.tenantId, departmentId, date);
+  reconcileDepartmentDate(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('departmentId') departmentId: string,
+    @Param('date') date: string,
+  ) {
+    return this.reconciliationService.reconcileDepartmentDate(tenantId, departmentId, date, {
+      actorUserId: user.userId,
+      reason: 'Manual department reconciliation',
+    });
   }
 
   @Get('payroll-ready')
   @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
-  getPayrollReady(@Query('startDate') startDate: string, @Query('endDate') endDate: string, @Req() req: any) {
-    return this.reconciliationService.getPayrollReadyRecords(
-      req.user.tenantId,
-      new Date(startDate),
-      new Date(endDate),
+  getPayrollReady(@TenantId() tenantId: string, @Query('startDate') startDate: string, @Query('endDate') endDate: string) {
+    return this.reconciliationService.getPayrollReadyRecords(tenantId, new Date(startDate), new Date(endDate));
+  }
+
+  @Get('payroll-preview')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
+  payrollPreview(@TenantId() tenantId: string, @Query('startDate') startDate: string, @Query('endDate') endDate: string) {
+    return this.reconciliationService.getPayrollPreview(tenantId, new Date(startDate), new Date(endDate));
+  }
+
+  @Get('exceptions')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
+  exceptionReview(@TenantId() tenantId: string, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+    return this.reconciliationService.getExceptionReview(
+      tenantId,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
     );
+  }
+
+  @Post('reprocess')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
+  reprocess(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: ReprocessReconciliationDTO,
+  ) {
+    return this.reconciliationService.reprocess(tenantId, body.startDate ?? body.date ?? new Date(), body.endDate ?? body.startDate ?? body.date ?? new Date(), {
+      actorUserId: user.userId,
+      reason: body.reason,
+      employeeId: body.employeeId,
+      departmentId: body.departmentId,
+    });
+  }
+
+  @Patch(':id/override')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
+  override(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') reconciliationLogId: string,
+    @Body() body: ReconciliationOverrideDTO,
+  ) {
+    return this.reconciliationService.overrideResult(tenantId, reconciliationLogId, user.userId, body);
+  }
+
+  @Patch(':id/approve')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
+  approve(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') reconciliationLogId: string,
+    @Body() body: ReconciliationApprovalDTO,
+  ) {
+    return this.reconciliationService.approveResult(tenantId, reconciliationLogId, user.userId, body);
   }
 }

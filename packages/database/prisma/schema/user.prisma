@@ -35,6 +35,7 @@ model User {
   department                Department?               @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   attendanceLogs            AttendanceLog[]
   attendanceAudits          AttendanceAudit[]
+  departmentAuditActions    DepartmentAudit[]        @relation("DepartmentAuditActor")
   employeeAudits            EmployeeAudit[]           @relation("EmployeeAuditEmployee")
   employeeAuditActions      EmployeeAudit[]           @relation("EmployeeAuditActor")
   leaveRequests             LeaveRequest[]

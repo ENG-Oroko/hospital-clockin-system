@@ -8,7 +8,7 @@ import { QUEUE_NAMES, ATTENDANCE_JOB_NAMES } from './constants/queue-names.const
 import { QueueConfig } from './queue.config';
 import { QueueHealthService } from './queue.health.service';
 import { FallbackDiskWriterService } from './fallback-disk-writer.service';
-import { IAttendanceIngestionJob } from './interfaces';
+import { IAttendanceIngestionJob, IAttendanceReconciliationJob } from './interfaces';
 
 // Import helpers (clean barrel import)
 import { 
@@ -227,6 +227,40 @@ export class QueueService implements OnModuleInit {
         `Bulk job add failed. ${payloads.length} jobs saved to fallback.`,
       );
      
+    }
+  }
+
+  async addAttendanceBatchReconcileJob(
+    payload: IAttendanceReconciliationJob,
+    priority: number = 7,
+  ): Promise<Job<IAttendanceReconciliationJob>> {
+    const validPriority = Math.max(1, Math.min(10, priority));
+    const isBackpressure = await this.healthService.isBackpressureActive();
+
+    if (isBackpressure) {
+      throw new ServiceUnavailableException('Queue is at capacity. Please retry batch reconciliation later.');
+    }
+
+    try {
+      return await this.attendanceQueue.add(
+        ATTENDANCE_JOB_NAMES.BATCH_RECONCILE,
+        payload,
+        this.queueConfig.getAttendanceJobOptions(validPriority),
+      );
+    } catch (error) {
+      this.logger.error(
+        formatErrorLog(error, {
+          operation: 'addAttendanceBatchReconcileJob',
+          startDate: payload.startDate,
+          endDate: payload.endDate,
+          tenantId: payload.tenantId,
+        }),
+      );
+
+      await this.fallbackWriter.writeJobToDisk(QUEUE_NAMES.ATTENDANCE_PROCESSING, payload);
+      throw new ServiceUnavailableException(
+        `Queue unavailable. Batch reconciliation job saved to fallback storage. Error: ${getErrorMessage(error)}`,
+      );
     }
   }
 

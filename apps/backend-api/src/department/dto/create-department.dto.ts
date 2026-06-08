@@ -5,6 +5,7 @@ import {
   IsObject,
   Length,
   IsUUID,
+  IsIn,
 } from 'class-validator';
 
 export class CreateDepartmentDto {
@@ -26,6 +27,10 @@ export class CreateDepartmentDto {
   @IsString()
   @Length(1, 50)
   costCenterCode?: string;
+
+  @IsOptional()
+  @IsIn(['ACTIVE', 'INACTIVE'])
+  status?: 'ACTIVE' | 'INACTIVE';
 
   @IsOptional()
   @IsObject()

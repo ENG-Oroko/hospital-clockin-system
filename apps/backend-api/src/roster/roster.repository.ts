@@ -123,28 +123,35 @@ export class RosterRepository {
     });
   }
 
-  async assertEmployeesBelongToTenant(tenantId: string, employeeIds: string[]) {
-    const employees = await this.database.client.user.findMany({
-      where: { tenantId, id: { in: employeeIds }, deletedAt: null },
-      select: { id: true, departmentId: true, employmentStatus: true },
+  async getAssignmentsForDateRange(
+    tenantId: string,
+    startDate: Date,
+    endDate: Date,
+    filters: { employeeId?: string; departmentId?: string } = {},
+  ) {
+    return this.database.client.rosterAssignment.findMany({
+      where: {
+        tenantId,
+        date: { gte: startDate, lte: endDate },
+        supersededAt: null,
+        status: { not: 'CANCELLED' },
+        ...(filters.employeeId ? { userId: filters.employeeId } : {}),
+        ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            payrollNumber: true,
+            departmentId: true,
+          },
+        },
+        department: { select: { id: true, name: true, code: true, rules: true } },
+      },
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
     });
-
-    if (employees.length !== employeeIds.length) {
-      throw new NotFoundException('One or more employees were not found for this tenant.');
-    }
-
-    return employees;
-  }
-
-  async assertDepartmentBelongsToTenant(tenantId: string, departmentId: string): Promise<void> {
-    const department = await this.database.client.department.findFirst({
-      where: { tenantId, id: departmentId },
-      select: { id: true },
-    });
-
-    if (!department) {
-      throw new NotFoundException('Department was not found for this tenant.');
-    }
   }
 
   async assignEmployees(tenantId: string, shiftTemplate: any, rows: any[]): Promise<any[]> {

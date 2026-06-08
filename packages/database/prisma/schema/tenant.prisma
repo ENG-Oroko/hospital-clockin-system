@@ -12,6 +12,7 @@ model Tenant {
 
   // System Core Relationships
   departments               Department[]
+  departmentAudits          DepartmentAudit[]
   users                     User[]
   employeeAudits            EmployeeAudit[]
   devices                   Device[]

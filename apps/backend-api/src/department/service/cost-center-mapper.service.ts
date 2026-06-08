@@ -7,7 +7,7 @@ export class CostCenterMapperService {
 
   async getCostCenterCode(departmentId: string, tenantId: string): Promise<string | null> {
     const department = await this.prisma.client.department.findFirst({
-      where: { id: departmentId, tenantId },
+      where: { id: departmentId, tenantId, status: 'ACTIVE' } as any,
       select: { costCenterCode: true },
     });
 
@@ -18,28 +18,9 @@ export class CostCenterMapperService {
     return department.costCenterCode;
   }
 
-  async updateCostCenterCode(
-    departmentId: string,
-    costCenterCode: string,
-    tenantId: string,
-  ) {
-    const department = await this.prisma.client.department.findFirst({
-      where: { id: departmentId, tenantId },
-    });
-
-    if (!department) {
-      throw new NotFoundException('Department not found');
-    }
-
-    return this.prisma.client.department.update({
-      where: { id: departmentId },
-      data: { costCenterCode },
-    });
-  }
-
   async getAllCostCenters(tenantId: string) {
     return this.prisma.client.department.findMany({
-      where: { tenantId },
+      where: { tenantId, status: 'ACTIVE' } as any,
       select: {
         id: true,
         name: true,

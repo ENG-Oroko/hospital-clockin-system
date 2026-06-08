@@ -30,6 +30,14 @@ export interface IAttendanceIngestionJob extends IBaseJobPayload {
   deviceSerialNumber?: string;
 }
 
+export interface IAttendanceReconciliationJob extends IBaseJobPayload {
+  startDate: string;
+  endDate: string;
+  employeeId?: string;
+  departmentId?: string;
+  triggeredByUserId?: string;
+}
+
 // FUTURE JOB INTERFACES (EXAMPLES)
 // IPayrollCalculationJob - Payload for payroll processing (future)
  

@@ -130,8 +130,11 @@ export interface TenantResponseDTO {
 
 export interface DepartmentCreateDTO {
   name: string;
-  tenantId: string;
   code: string; // e.g., "ICU", "OPD"
+  parentId?: string;
+  costCenterCode?: string;
+  status?: 'ACTIVE' | 'INACTIVE';
+  rules?: Record<string, unknown>;
 }
 
 export interface DepartmentResponseDTO {
@@ -139,6 +142,9 @@ export interface DepartmentResponseDTO {
   name: string;
   code: string;
   tenantId: string;
+  parentId: string | null;
+  costCenterCode: string | null;
+  status: 'ACTIVE' | 'INACTIVE' | string;
   memberCount: number;
 }
 

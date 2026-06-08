@@ -8,11 +8,6 @@ import { FallbackDiskWriterService } from './fallback-disk-writer.service';
 // Constants
 import { QUEUE_NAMES } from './constants/queue-names.constants';
 
-
-@Module({
-  providers: [QueueService]
-})
-
 @Module({
     imports: [
         ConfigModule,  

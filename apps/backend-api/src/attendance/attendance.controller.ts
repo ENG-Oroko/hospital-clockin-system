@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { AttendanceLog } from '@chronos/database';
 import { UserRole } from '@chronos/types-common';
 import { JwtAuthGuard } from '../common/auth/jwt-auth.guard';
 import { Roles } from '../common/auth/roles.decorator';
 import { RolesGuard } from '../common/auth/roles.guard';
+import { TenantId } from '../common/tenant/tenant-id.decorator';
 import { AttendanceService } from './attendance.service';
 
 class IngestLogDto {
@@ -26,21 +27,21 @@ export class AttendanceController {
 
   @Post('ingest')
   @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
-  async ingestLog(@Body() dto: IngestLogDto, @Req() req: any) {
+  async ingestLog(@Body() dto: IngestLogDto, @TenantId() tenantId: string) {
     return this.attendanceService.ingestLog({
       ...dto,
-      tenantId: req.user.tenantId,
+      tenantId,
       timestamp: new Date(dto.timestamp),
     });
   }
 
   @Post('ingest/bulk')
   @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
-  async bulkIngest(@Body() dto: BulkIngestDto, @Req() req: any) {
+  async bulkIngest(@Body() dto: BulkIngestDto, @TenantId() tenantId: string) {
     return this.attendanceService.bulkIngest(
       dto.logs.map((log) => ({
         ...log,
-        tenantId: req.user.tenantId,
+        tenantId,
         timestamp: new Date(log.timestamp),
       })),
     );
@@ -55,9 +56,9 @@ export class AttendanceController {
     @Query('direction') direction: string,
     @Query('page') page: number,
     @Query('limit') limit: number,
-    @Req() req: any,
+    @TenantId() tenantId: string,
   ): Promise<{ data: AttendanceLog[]; total: number; page: number; limit: number }> {
-    return this.attendanceService.getRawLogs(req.user.tenantId, {
+    return this.attendanceService.getRawLogs(tenantId, {
       userId,
       startDate: startDate ? new Date(startDate) : undefined,
       endDate: endDate ? new Date(endDate) : undefined,
@@ -69,7 +70,7 @@ export class AttendanceController {
 
   @Get('logs/:id')
   @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
-  async getLogById(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
-    return this.attendanceService.getRawLogById(req.user.tenantId, id);
+  async getLogById(@Param('id', ParseUUIDPipe) id: string, @TenantId() tenantId: string) {
+    return this.attendanceService.getRawLogById(tenantId, id);
   }
 }

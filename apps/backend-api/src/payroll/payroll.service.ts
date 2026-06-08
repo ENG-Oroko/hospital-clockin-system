@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
+import { PrismaService } from '../database/prisma.service';
 import { EmployeeService } from '../employee/employee.service';
 import { ReconciliationService } from '../reconciliation/reconciliation.service';
 
@@ -25,7 +25,7 @@ export interface CreatePeriodDTO {
 @Injectable()
 export class PayrollService {
   constructor(
-    private readonly db: DatabaseService,
+    private readonly db: PrismaService,
     private readonly employeeService: EmployeeService,
     private readonly reconciliationService: ReconciliationService,
   ) {}
@@ -92,7 +92,7 @@ export class PayrollService {
     const recordsByEmployee = new Map<string, typeof reconciliationRecords>();
 
     for (const record of reconciliationRecords) {
-      const employeeId = record.rosterAssignment.userId;
+      const employeeId = record.employeeId;
       const records = recordsByEmployee.get(employeeId) ?? [];
       records.push(record);
       recordsByEmployee.set(employeeId, records);
@@ -108,11 +108,10 @@ export class PayrollService {
       let holidayHours = 0;
 
       for (const record of records) {
-        const shiftDate = record.rosterAssignment.date.toISOString().split('T')[0];
-        const isHoliday = observedHolidayDates.has(shiftDate);
-        const baseHours = Number(record.calculatedBaseHours);
-        const overtime = Number(record.calculatedOvertime);
-        const night = Number(record.calculatedNightShift);
+        const isHoliday = observedHolidayDates.has(record.shiftDate);
+        const baseHours = record.baseHours;
+        const overtime = record.overtimeHours;
+        const night = record.nightHours;
 
         regularHours += baseHours;
         overtimeHours += overtime;
@@ -123,11 +122,9 @@ export class PayrollService {
         }
       }
 
-      const lastAssignment = records[records.length - 1].rosterAssignment;
-      const hourlyRate = lastAssignment.overriddenHourlyRate === null
-        ? employee.hourlyRate
-        : Number(lastAssignment.overriddenHourlyRate);
-      const departmentRules = lastAssignment.department?.rules as DepartmentRules | null;
+      const lastRecord = records[records.length - 1];
+      const hourlyRate = lastRecord.hourlyRate === null ? employee.hourlyRate : lastRecord.hourlyRate;
+      const departmentRules = lastRecord.departmentRules as DepartmentRules | null;
       const nightPremiumRate = departmentRules?.nightPremiumRate ?? 0;
       const regularPay = regularHours * hourlyRate;
       const overtimePay = overtimeHours * hourlyRate * overtimeMultiplier;

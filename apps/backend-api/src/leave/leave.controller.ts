@@ -10,9 +10,9 @@ import {
   Patch,
   Post,
   Query,
-  Req,
   UseGuards,
 } from '@nestjs/common';
+import { TenantId } from '../common/tenant/tenant-id.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { LeaveService } from './leave.service';
 import { CreateLeaveDto } from './dto/create-leave.dto';
@@ -29,32 +29,32 @@ export class LeaveController {
   @HttpCode(HttpStatus.CREATED)
   async createLeave(
     @Body() dto: CreateLeaveDto,
-    @Req() req: any,
+    @TenantId() tenantId: string,
   ): Promise<ILeave> {
     return this.leaveService.createLeave({
       ...dto,
-      tenantId: req.user.tenantId,
+      tenantId,
     });
   }
 
   @Get()
   async getAllLeaves(
-    @Req() req: any,
+    @TenantId() tenantId: string,
     @Query('status') status?: LeaveStatus,
   ): Promise<ILeave[]> {
     if (status) {
-      return this.leaveService.getLeavesByStatus(req.user.tenantId, status);
+      return this.leaveService.getLeavesByStatus(tenantId, status);
     }
-    return this.leaveService.getAllLeaves(req.user.tenantId);
+    return this.leaveService.getAllLeaves(tenantId);
   }
 
   @Get('employee/:employeeId')
   async getLeavesByEmployee(
     @Param('employeeId', ParseUUIDPipe) employeeId: string,
-    @Req() req: any,
+    @TenantId() tenantId: string,
   ): Promise<ILeave[]> {
     return this.leaveService.getLeavesByEmployee(
-      req.user.tenantId,
+      tenantId,
       employeeId,
     );
   }
@@ -62,35 +62,35 @@ export class LeaveController {
   @Get(':id')
   async getLeaveById(
     @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: any,
+    @TenantId() tenantId: string,
   ): Promise<ILeave> {
-    return this.leaveService.getLeaveById(req.user.tenantId, id);
+    return this.leaveService.getLeaveById(tenantId, id);
   }
 
   @Patch(':id/status')
   async updateLeaveStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLeaveStatusDto,
-    @Req() req: any,
+    @TenantId() tenantId: string,
   ): Promise<ILeave> {
-    return this.leaveService.updateLeaveStatus(req.user.tenantId, id, dto);
+    return this.leaveService.updateLeaveStatus(tenantId, id, dto);
   }
 
   @Patch(':id/cancel')
   async cancelLeave(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('employeeId', ParseUUIDPipe) employeeId: string,
-    @Req() req: any,
+    @TenantId() tenantId: string,
   ): Promise<ILeave> {
-    return this.leaveService.cancelLeave(req.user.tenantId, id, employeeId);
+    return this.leaveService.cancelLeave(tenantId, id, employeeId);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteLeave(
     @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: any,
+    @TenantId() tenantId: string,
   ): Promise<void> {
-    return this.leaveService.deleteLeave(req.user.tenantId, id);
+    return this.leaveService.deleteLeave(tenantId, id);
   }
 }

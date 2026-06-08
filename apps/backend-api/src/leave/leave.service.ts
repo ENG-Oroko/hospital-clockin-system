@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
+import { PrismaService } from '../database/prisma.service';
 import { CreateLeaveDto } from './dto/create-leave.dto';
 import { UpdateLeaveStatusDto } from './dto/update-leave-status.dto';
 import { LeaveStatus } from './enums/leave-status.enum';
@@ -11,7 +11,7 @@ import { ILeave } from './interfaces/leave.interface';
 
 @Injectable()
 export class LeaveService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly db: PrismaService) {}
 
   private mapToILeave(record: any): ILeave {
     return {

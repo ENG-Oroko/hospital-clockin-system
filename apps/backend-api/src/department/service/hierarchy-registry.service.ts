@@ -7,7 +7,7 @@ export class HierarchyRegistryService {
 
   async getHierarchy(tenantId: string) {
     const departments = await this.prisma.client.department.findMany({
-      where: { tenantId },
+      where: { tenantId, status: 'ACTIVE' } as any,
       orderBy: { name: 'asc' },
     });
 
@@ -16,7 +16,7 @@ export class HierarchyRegistryService {
 
   async getChildren(departmentId: string, tenantId: string) {
     const department = await this.prisma.client.department.findFirst({
-      where: { id: departmentId, tenantId },
+      where: { id: departmentId, tenantId, status: 'ACTIVE' } as any,
     });
 
     if (!department) {
@@ -24,14 +24,14 @@ export class HierarchyRegistryService {
     }
 
     return this.prisma.client.department.findMany({
-      where: { parentId: departmentId, tenantId },
+      where: { parentId: departmentId, tenantId, status: 'ACTIVE' } as any,
       orderBy: { name: 'asc' },
     });
   }
 
   async getRootDepartments(tenantId: string) {
     return this.prisma.client.department.findMany({
-      where: { tenantId, parentId: null },
+      where: { tenantId, parentId: null, status: 'ACTIVE' } as any,
       orderBy: { name: 'asc' },
     });
   }

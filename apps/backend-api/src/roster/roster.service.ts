@@ -12,6 +12,8 @@ import {
 import { AuthenticatedUser } from '../common/auth/authenticated-user';
 import { hasDepartmentScopedEmployeeAccess, hasTenantWideEmployeeAccess } from '../common/auth/role-policy';
 import { normalizePagination, paginatedResponse } from '../common/pagination';
+import { DepartmentService } from '../department/department.service';
+import { EmployeeService } from '../employee/employee.service';
 import {
   assertDate,
   assertEnumValue,
@@ -30,7 +32,11 @@ import { RosterRepository } from './roster.repository';
 
 @Injectable()
 export class RosterService {
-  constructor(private readonly rosterRepository: RosterRepository) {}
+  constructor(
+    private readonly rosterRepository: RosterRepository,
+    private readonly departmentService: DepartmentService,
+    private readonly employeeService: EmployeeService,
+  ) {}
 
   async createShiftTemplate(tenantId: string, payload: ShiftTemplateCreateDTO) {
     const startTime = assertTime(payload.startTime, 'startTime');
@@ -135,7 +141,6 @@ export class RosterService {
     }
 
     const employeeIds = assertUuidArray(payload.employeeIds, 'employeeIds');
-    const employees = await this.rosterRepository.assertEmployeesBelongToTenant(tenantId, employeeIds);
     const effectiveFrom = assertDate(payload.effectiveFrom, 'effectiveFrom');
     const effectiveTo = payload.effectiveTo ? assertDate(payload.effectiveTo, 'effectiveTo') : effectiveFrom;
 
@@ -152,11 +157,14 @@ export class RosterService {
 
     if (departmentId) {
       assertUuid(departmentId, 'departmentId');
-      await this.rosterRepository.assertDepartmentBelongsToTenant(tenantId, departmentId);
+      await this.departmentService.findOne(departmentId, tenantId);
     }
 
+    const eligibleEmployees = await Promise.all(
+      employeeIds.map((employeeId) => this.employeeService.assertEmployeeEligible(tenantId, employeeId)),
+    );
     const employeeById = new Map<string, { id: string; departmentId: string | null; employmentStatus: string }>(
-      employees.map((employee) => [employee.id, employee]),
+      eligibleEmployees.map((employee) => [employee.id, employee]),
     );
     const rows = employeeIds.flatMap((employeeId) => {
       const employee = employeeById.get(employeeId);
@@ -164,10 +172,6 @@ export class RosterService {
 
       if (!resolvedDepartmentId) {
         throw new BadRequestException('departmentId is required when an employee has no home department.');
-      }
-
-      if (employee?.employmentStatus === 'TERMINATED' || employee?.employmentStatus === 'SUSPENDED') {
-        throw new BadRequestException('Terminated or suspended employees cannot be assigned to shifts.');
       }
 
       this.assertCanScheduleDepartment(actor, resolvedDepartmentId);
@@ -194,7 +198,7 @@ export class RosterService {
     await this.rosterRepository.findShiftTemplateOrThrow(tenantId, shiftTemplateId);
 
     const employeeIds = assertUuidArray(payload.employeeIds, 'employeeIds');
-    await this.rosterRepository.assertEmployeesBelongToTenant(tenantId, employeeIds);
+    await Promise.all(employeeIds.map((employeeId) => this.employeeService.assertEmployeeEligible(tenantId, employeeId)));
     const effectiveFrom = assertDate(payload.effectiveFrom, 'effectiveFrom');
     const effectiveTo = payload.effectiveTo ? assertDate(payload.effectiveTo, 'effectiveTo') : effectiveFrom;
 
@@ -245,6 +249,22 @@ export class RosterService {
     assertUuid(departmentId, 'departmentId');
     const normalizedDate = typeof date === 'string' ? assertDate(date, 'date') : this.normalizeDateOnly(date);
     const assignments = await this.rosterRepository.getDepartmentRoster(tenantId, departmentId, normalizedDate);
+    return assignments.map((assignment) => this.toRosterAssignmentSnapshot(assignment));
+  }
+
+  async getAssignmentsForDateRange(
+    tenantId: string,
+    startDate: Date | string,
+    endDate: Date | string,
+    filters: { employeeId?: string; departmentId?: string } = {},
+  ) {
+    const normalizedStart = typeof startDate === 'string' ? assertDate(startDate, 'startDate') : this.normalizeDateOnly(startDate);
+    const normalizedEnd = typeof endDate === 'string' ? assertDate(endDate, 'endDate') : this.normalizeDateOnly(endDate);
+
+    if (filters.employeeId) assertUuid(filters.employeeId, 'employeeId');
+    if (filters.departmentId) assertUuid(filters.departmentId, 'departmentId');
+
+    const assignments = await this.rosterRepository.getAssignmentsForDateRange(tenantId, normalizedStart, normalizedEnd, filters);
     return assignments.map((assignment) => this.toRosterAssignmentSnapshot(assignment));
   }
 

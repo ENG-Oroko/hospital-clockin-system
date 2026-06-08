@@ -10,6 +10,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { UserRole } from '@chronos/types-common';
+import { CurrentUser } from '../common/auth/current-user.decorator';
+import type { AuthenticatedUser } from '../common/auth/authenticated-user';
 import { Roles } from '../common/auth/roles.decorator';
 import { RolesGuard } from '../common/auth/roles.guard';
 import { JwtAuthGuard } from '../common/auth/jwt-auth.guard';
@@ -32,8 +34,8 @@ export class DepartmentController {
 
   @Post()
   @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
-  createDepartment(@Body() dto: CreateDepartmentDto, @TenantId() tenantId: string) {
-    return this.departmentService.create(dto, tenantId);
+  createDepartment(@Body() dto: CreateDepartmentDto, @TenantId() tenantId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.departmentService.create(dto, tenantId, user.userId);
   }
 
   @Get('hierarchy/tree')
@@ -72,14 +74,30 @@ export class DepartmentController {
     @Param('id', ParseUUIDPipe) departmentId: string,
     @Body() dto: UpdateDepartmentDto,
     @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.departmentService.update(departmentId, dto, tenantId);
+    return this.departmentService.update(departmentId, dto, tenantId, user.userId);
   }
 
   @Delete(':id')
   @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
-  deleteDepartment(@Param('id', ParseUUIDPipe) departmentId: string, @TenantId() tenantId: string) {
-    return this.departmentService.delete(departmentId, tenantId);
+  deleteDepartment(
+    @Param('id', ParseUUIDPipe) departmentId: string,
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.departmentService.delete(departmentId, tenantId, user.userId);
+  }
+
+  @Patch(':id/status')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
+  updateStatus(
+    @Param('id', ParseUUIDPipe) departmentId: string,
+    @Body('status') status: 'ACTIVE' | 'INACTIVE',
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.departmentService.updateStatus(departmentId, tenantId, status, user.userId);
   }
 
   @Get(':id/children')
@@ -100,8 +118,9 @@ export class DepartmentController {
     @Param('id', ParseUUIDPipe) departmentId: string,
     @Body('costCenterCode') costCenterCode: string,
     @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.costCenterMapper.updateCostCenterCode(departmentId, costCenterCode, tenantId);
+    return this.departmentService.updateCostCenterCode(departmentId, tenantId, costCenterCode, user.userId);
   }
 
   @Post(':id/head')
@@ -110,8 +129,9 @@ export class DepartmentController {
     @Param('id', ParseUUIDPipe) departmentId: string,
     @Body() body: AssignDepartmentMemberDto,
     @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.departmentService.assignDepartmentHead(tenantId, departmentId, body.userId);
+    return this.departmentService.assignDepartmentHead(tenantId, departmentId, body.userId, user);
   }
 
   @Post(':id/staff')
@@ -120,8 +140,9 @@ export class DepartmentController {
     @Param('id', ParseUUIDPipe) departmentId: string,
     @Body() body: AssignDepartmentMemberDto,
     @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.departmentService.assignDepartmentStaff(tenantId, departmentId, body.userId);
+    return this.departmentService.assignDepartmentStaff(tenantId, departmentId, body.userId, user);
   }
 
   @Get(':id/staff')
