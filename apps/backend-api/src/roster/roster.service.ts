@@ -222,6 +222,10 @@ export class RosterService {
     return assignments.map((assignment) => this.toRosterAssignmentResponse(assignment));
   }
 
+  /**
+   * Public integration contract for Attendance and Reconciliation.
+   * Resolves an active assignment snapshot without exposing mutable shift-template state.
+   */
   async getActiveAssignmentForUserDate(tenantId: string, userId: string, date: Date | string) {
     assertUuid(userId, 'userId');
     const normalizedDate = typeof date === 'string' ? assertDate(date, 'date') : this.normalizeDateOnly(date);
@@ -229,6 +233,10 @@ export class RosterService {
     return assignment ? this.toRosterAssignmentSnapshot(assignment) : null;
   }
 
+  /**
+   * Public integration contract for Attendance and Reconciliation.
+   * Returns immutable assignment snapshot fields captured at assignment creation.
+   */
   async getAssignmentSnapshot(tenantId: string, assignmentId: string) {
     assertUuid(assignmentId, 'assignmentId');
     return this.toRosterAssignmentSnapshot(
@@ -236,6 +244,10 @@ export class RosterService {
     );
   }
 
+  /**
+   * Public integration contract for Attendance.
+   * Resolves the active tenant-scoped assignment for an employee/date.
+   */
   async getCurrentAssignment(tenantId: string, userId: string, date: Date | string = new Date()) {
     return this.getActiveAssignmentForUserDate(tenantId, userId, date);
   }
@@ -245,6 +257,10 @@ export class RosterService {
     return this.rosterRepository.getAssignmentHistory(tenantId, assignmentId);
   }
 
+  /**
+   * Public integration contract for Reconciliation.
+   * Returns immutable assignment snapshots for department/date reconciliation.
+   */
   async getDepartmentRoster(tenantId: string, departmentId: string, date: Date | string) {
     assertUuid(departmentId, 'departmentId');
     const normalizedDate = typeof date === 'string' ? assertDate(date, 'date') : this.normalizeDateOnly(date);
@@ -252,6 +268,10 @@ export class RosterService {
     return assignments.map((assignment) => this.toRosterAssignmentSnapshot(assignment));
   }
 
+  /**
+   * Public integration contract for Reconciliation batch processing.
+   * Returns immutable assignment snapshots for a tenant-scoped date range.
+   */
   async getAssignmentsForDateRange(
     tenantId: string,
     startDate: Date | string,

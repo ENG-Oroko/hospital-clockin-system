@@ -117,16 +117,28 @@ export class EmployeeService {
     return this.toResponse(employee);
   }
 
+  /**
+   * Public integration contract for owning-service collaborators.
+   * Returns a tenant-scoped employee response without controller role filtering.
+   */
   async getEmployeeById(tenantId: string, id: string) {
     assertUuid(id, 'id');
     return this.toResponse(await this.employeeRepository.findByIdOrThrow(tenantId, id));
   }
 
+  /**
+   * Public integration contract for Attendance/Device ingestion.
+   * Resolves a tenant-scoped active employee by the hardware device PIN.
+   */
   async resolveEmployeeByDevicePin(tenantId: string, devicePin: string) {
     const normalizedDevicePin = assertRequiredString(devicePin, 'devicePin', 50);
     return this.toResponse(await this.employeeRepository.findByDevicePinOrThrow(tenantId, normalizedDevicePin));
   }
 
+  /**
+   * Public integration contract for Roster, Attendance, and Reconciliation.
+   * Throws when the employee is deleted, inactive, terminated, suspended, or outside the tenant.
+   */
   async assertEmployeeEligible(tenantId: string, employeeId: string) {
     assertUuid(employeeId, 'employeeId');
     const employee = await this.employeeRepository.findByIdOrThrow(tenantId, employeeId);
@@ -138,6 +150,10 @@ export class EmployeeService {
     return this.toResponse(employee);
   }
 
+  /**
+   * Public integration contract for Payroll.
+   * Returns the tenant-scoped, payroll-safe employee profile for a single eligible employee.
+   */
   async getPayrollProfile(tenantId: string, employeeId: string) {
     const employee = await this.assertEmployeeEligible(tenantId, employeeId);
 
@@ -155,6 +171,10 @@ export class EmployeeService {
     };
   }
 
+  /**
+   * Public integration contract for Payroll and Reporting.
+   * Returns tenant-scoped payroll profiles for currently active employees only.
+   */
   async getPayrollProfiles(tenantId: string) {
     const employees = await this.employeeRepository.listPayrollProfiles(tenantId);
 
@@ -172,6 +192,10 @@ export class EmployeeService {
     }));
   }
 
+  /**
+   * Public integration contract for Department, Roster, and Reporting.
+   * Lists non-deleted employees assigned to a tenant-scoped department.
+   */
   async getDepartmentEmployees(tenantId: string, departmentId: string) {
     assertUuid(departmentId, 'departmentId');
     await this.employeeRepository.assertDepartmentBelongsToTenant(tenantId, departmentId);
@@ -179,6 +203,10 @@ export class EmployeeService {
     return employees.map((employee) => this.toResponse(employee));
   }
 
+  /**
+   * Public integration contract for Reconciliation and Analytics.
+   * Includes deleted/inactive lifecycle state without exposing mutable employee internals.
+   */
   async getEmployeeLifecycleState(tenantId: string, employeeId: string) {
     assertUuid(employeeId, 'employeeId');
     const employee = await this.employeeRepository.findByIdOrThrow(tenantId, employeeId, true);

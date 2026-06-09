@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { AttendanceService } from '../attendance/attendance.service';
 import { DepartmentService } from '../department/department.service';
 import { EmployeeService } from '../employee/employee.service';
@@ -9,8 +10,13 @@ import {
   ReconciliationApprovalDTO,
   ReconciliationOverrideDTO,
   ReconciliationResultDTO,
+  UnrosteredExceptionOverrideDTO,
+  UnrosteredExceptionReviewDTO,
 } from './dto/reconciliation.dto';
 import { ReconciliationRepository } from './reconciliation.repository';
+
+const UNROSTERED_REASON = 'Attendance recorded without roster assignment';
+const UNROSTERED_ACTIVE_STATES = new Set(['REQUIRES_REVIEW', 'REVIEWED']);
 
 interface ReconciliationSnapshot {
   id: string;
@@ -35,6 +41,25 @@ interface ReconcileOptions {
   departmentId?: string;
 }
 
+export interface UnrosteredExceptionState {
+  exceptionId: string;
+  tenantId: string;
+  employeeId: string;
+  attendanceDate: string;
+  attendanceLogIds: string[];
+  devices: Array<{ id: string; name?: string | null; serialCode?: string | null }>;
+  outcome: 'UNROSTERED';
+  reviewStatus: string;
+  reviewState: string;
+  reason: string;
+  reviewedByUserId?: string;
+  reviewedAt?: string;
+  actionTaken?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  auditTrail?: unknown[];
+}
+
 @Injectable()
 export class ReconciliationService {
   constructor(
@@ -56,12 +81,15 @@ export class ReconciliationService {
     const assignment = await this.rosterService.getActiveAssignmentForUserDate(tenantId, employeeId, shiftDate);
 
     if (!assignment) {
-      return this.reconcileUnrosteredLogs(tenantId, employeeId, shiftDate);
+      return this.reconcileUnrosteredLogs(tenantId, employeeId, shiftDate, options);
     }
 
     return this.reconcileAssignment(tenantId, assignment as ReconciliationSnapshot, options);
   }
 
+  /**
+   * Public integration contract for manual correction and roster-driven workflows.
+   */
   async reconcileAssignmentById(
     tenantId: string,
     assignmentId: string,
@@ -72,6 +100,9 @@ export class ReconciliationService {
     return this.reconcileAssignment(tenantId, assignment as ReconciliationSnapshot, options);
   }
 
+  /**
+   * Public integration contract for department-level reconciliation.
+   */
   async reconcileDepartmentDate(
     tenantId: string,
     departmentId: string,
@@ -91,6 +122,9 @@ export class ReconciliationService {
     return { processed: results.length, results };
   }
 
+  /**
+   * Public integration contract for batch queue processing and payroll-period preparation.
+   */
   async reconcileDateRange(
     tenantId: string,
     startDate: Date | string,
@@ -125,6 +159,10 @@ export class ReconciliationService {
     return { processed: results.length, skipped: assignments.length - results.length, results };
   }
 
+  /**
+   * Public integration contract for Payroll.
+   * Returns only tenant-scoped, resolved, unflagged reconciliation records.
+   */
   async getPayrollReadyRecords(tenantId: string, startDate: Date, endDate: Date) {
     const records = await this.reconciliationRepository.findPayrollReadyRecords(
       tenantId,
@@ -158,6 +196,157 @@ export class ReconciliationService {
       startDate ? this.normalizeDateOnly(startDate) : undefined,
       endDate ? this.normalizeDateOnly(endDate) : undefined,
     );
+  }
+
+  /**
+   * Public integration contract for exception-management consumers.
+   */
+  async listUnrosteredExceptions(tenantId: string) {
+    const audits = await this.reconciliationRepository.findUnrosteredExceptionAudits(tenantId);
+    return this.groupUnrosteredExceptionAudits(audits).filter((exception) => (
+      UNROSTERED_ACTIVE_STATES.has(exception.reviewStatus)
+    ));
+  }
+
+  /**
+   * Public integration contract for exception-management detail views.
+   */
+  async getUnrosteredException(tenantId: string, exceptionId: string) {
+    const exception = await this.getUnrosteredExceptionOrThrow(tenantId, exceptionId);
+    const logs = await this.reconciliationRepository.findAttendanceLogsForUserDate(
+      tenantId,
+      exception.employeeId,
+      this.normalizeDateOnly(exception.attendanceDate),
+    );
+
+    return {
+      ...exception,
+      logs: logs.filter((log) => exception.attendanceLogIds.includes(log.id)),
+    };
+  }
+
+  async reviewUnrosteredException(
+    tenantId: string,
+    exceptionId: string,
+    actorUserId: string,
+    payload: UnrosteredExceptionReviewDTO,
+  ) {
+    const existing = await this.getUnrosteredExceptionOrThrow(tenantId, exceptionId);
+    const next = {
+      ...existing,
+      reviewStatus: 'REVIEWED',
+      reviewState: 'REVIEWED',
+      reviewedByUserId: actorUserId,
+      reviewedAt: new Date().toISOString(),
+      actionTaken: payload.action,
+    };
+
+    await this.reconciliationRepository.createAudit({
+      tenantId,
+      actorUserId,
+      actionType: 'UNROSTERED_EXCEPTION_REVIEWED',
+      targetLogId: existing.attendanceLogIds[0],
+      justification: payload.reason,
+      oldValues: existing,
+      newValues: next,
+    });
+
+    return next;
+  }
+
+  async approveUnrosteredOverride(
+    tenantId: string,
+    exceptionId: string,
+    actorUserId: string,
+    payload: UnrosteredExceptionOverrideDTO,
+  ) {
+    const existing = await this.getUnrosteredExceptionOrThrow(tenantId, exceptionId);
+    const next = {
+      ...existing,
+      reviewStatus: 'APPROVED_OVERRIDE',
+      reviewState: 'APPROVED_OVERRIDE',
+      reviewedByUserId: actorUserId,
+      reviewedAt: new Date().toISOString(),
+      actionTaken: 'APPROVED_OVERRIDE',
+    };
+
+    await this.reconciliationRepository.createAudit({
+      tenantId,
+      actorUserId,
+      actionType: 'UNROSTERED_EXCEPTION_OVERRIDE_APPROVED',
+      targetLogId: existing.attendanceLogIds[0],
+      justification: payload.reason,
+      oldValues: existing,
+      newValues: next,
+    });
+
+    return {
+      ...next,
+      payrollReadyRecord: null,
+    };
+  }
+
+  async reprocessUnrosteredException(tenantId: string, exceptionId: string, actorUserId: string, reason?: string) {
+    const existing = await this.getUnrosteredExceptionOrThrow(tenantId, exceptionId);
+    const result = await this.reconcileUserDate(tenantId, existing.employeeId, existing.attendanceDate, {
+      actorUserId,
+      reason: reason ?? 'Reprocess unrostered exception after roster correction',
+    });
+
+    if (!result.reconciliationLog) {
+      const next = {
+        ...(result.exception as UnrosteredExceptionState ?? existing),
+        reviewStatus: 'REQUIRES_REVIEW',
+        reviewState: 'REQUIRES_REVIEW',
+        reviewedByUserId: actorUserId,
+        reviewedAt: new Date().toISOString(),
+        actionTaken: 'REPROCESS_ATTEMPTED',
+      };
+
+      await this.reconciliationRepository.createAudit({
+        tenantId,
+        actorUserId,
+        actionType: 'UNROSTERED_EXCEPTION_REPROCESSED',
+        targetLogId: existing.attendanceLogIds[0],
+        justification: reason ?? 'Reprocess attempted but roster correction is still missing',
+        oldValues: existing,
+        newValues: next,
+      });
+
+      return {
+        exception: next,
+        result,
+        cleared: false,
+      };
+    }
+
+    const next = {
+      ...existing,
+      reviewStatus: 'CLEARED',
+      reviewState: 'CLEARED',
+      reviewedByUserId: actorUserId,
+      reviewedAt: new Date().toISOString(),
+      actionTaken: 'REPROCESSED',
+    };
+
+    await this.reconciliationRepository.createAudit({
+      tenantId,
+      actorUserId,
+      actionType: 'UNROSTERED_EXCEPTION_CLEARED',
+      targetLogId: existing.attendanceLogIds[0],
+      justification: reason ?? 'Roster correction reconciled successfully',
+      oldValues: existing,
+      newValues: {
+        ...next,
+        reconciliationLogId: (result.reconciliationLog as { id?: string })?.id,
+      },
+    });
+
+    return {
+      exception: next,
+      result,
+      cleared: true,
+    };
   }
 
   async reprocess(tenantId: string, startDate: Date | string, endDate: Date | string, options: ReconcileOptions = {}) {
@@ -278,7 +467,7 @@ export class ReconciliationService {
 
     return {
       reconciliationLog,
-      payrollReadyRecord: isResolved
+      payrollReadyRecord: isResolved && !isFlagged
         ? this.toPayrollReadyRecord({ ...reconciliationLog, rosterAssignment: assignment })
         : null,
       summary: {
@@ -298,11 +487,13 @@ export class ReconciliationService {
     };
   }
 
-  private async reconcileUnrosteredLogs(tenantId: string, employeeId: string, date: Date): Promise<ReconciliationResultDTO> {
-    const start = new Date(date);
-    const end = new Date(date);
-    end.setUTCHours(23, 59, 59, 999);
-    const logs = await this.attendanceService.findRawLogsForUserWindow(tenantId, employeeId, start, end);
+  private async reconcileUnrosteredLogs(
+    tenantId: string,
+    employeeId: string,
+    date: Date,
+    options: ReconcileOptions,
+  ): Promise<ReconciliationResultDTO> {
+    const logs = await this.reconciliationRepository.findAttendanceLogsForUserDate(tenantId, employeeId, date);
 
     if (logs.length === 0) {
       throw new NotFoundException('No roster assignment or attendance logs were found for this employee date.');
@@ -313,9 +504,12 @@ export class ReconciliationService {
     const lastOut = outLogs[outLogs.length - 1]?.timestamp ?? null;
     const workedMinutes = firstIn && lastOut ? Math.max(0, Math.floor((lastOut.getTime() - firstIn.getTime()) / 60000)) : 0;
 
+    const exception = await this.ensureUnrosteredException(tenantId, employeeId, date, logs, options);
+
     return {
       reconciliationLog: null,
       payrollReadyRecord: null,
+      exception,
       summary: {
         tenantId,
         userId: employeeId,
@@ -326,6 +520,120 @@ export class ReconciliationService {
         status: 'UNROSTERED',
       },
     };
+  }
+
+  private async ensureUnrosteredException(
+    tenantId: string,
+    employeeId: string,
+    date: Date,
+    logs: any[],
+    options: ReconcileOptions,
+  ): Promise<UnrosteredExceptionState> {
+    const attendanceDate = date.toISOString().slice(0, 10);
+    const existing = (await this.listUnrosteredExceptions(tenantId)).find(
+      (exception) => exception.employeeId === employeeId && exception.attendanceDate === attendanceDate,
+    );
+
+    if (existing) {
+      return existing;
+    }
+
+    const exception: UnrosteredExceptionState = {
+      exceptionId: randomUUID(),
+      tenantId,
+      employeeId,
+      attendanceDate,
+      attendanceLogIds: logs.map((log) => log.id),
+      devices: logs
+        .map((log) => log.device)
+        .filter(Boolean)
+        .map((device) => ({
+          id: device.id,
+          name: device.name,
+          serialCode: device.serialCode,
+        })),
+      outcome: 'UNROSTERED',
+      reviewStatus: 'REQUIRES_REVIEW',
+      reviewState: 'REQUIRES_REVIEW',
+      reason: UNROSTERED_REASON,
+    };
+
+    await this.reconciliationRepository.createAudit({
+      tenantId,
+      actorUserId: options.actorUserId ?? employeeId,
+      actionType: 'UNROSTERED_EXCEPTION_CREATED',
+      targetLogId: exception.attendanceLogIds[0],
+      justification: options.reason ?? UNROSTERED_REASON,
+      newValues: exception,
+    });
+
+    return exception;
+  }
+
+  private async getUnrosteredExceptionOrThrow(tenantId: string, exceptionId: string) {
+    const audits = await this.reconciliationRepository.findUnrosteredExceptionAuditById(tenantId, exceptionId);
+    const [exception] = this.groupUnrosteredExceptionAudits(audits);
+
+    if (!exception) {
+      throw new NotFoundException('Unrostered reconciliation exception was not found for this tenant.');
+    }
+
+    return exception;
+  }
+
+  private groupUnrosteredExceptionAudits(audits: any[]): UnrosteredExceptionState[] {
+    const byId = new Map<string, UnrosteredExceptionState>();
+
+    for (const audit of audits) {
+      const oldValue = this.asExceptionState(audit.oldValues);
+      const newValue = this.asExceptionState(audit.newValues);
+      const current = newValue ?? oldValue;
+
+      if (!current?.exceptionId) {
+        continue;
+      }
+
+      const previous = byId.get(current.exceptionId);
+      byId.set(current.exceptionId, {
+        ...previous,
+        ...current,
+        createdAt: previous?.createdAt ?? audit.createdAt,
+        updatedAt: audit.createdAt,
+        auditTrail: [
+          ...(previous?.auditTrail ?? []),
+          {
+            id: audit.id,
+            actionType: audit.actionType,
+            justification: audit.justification,
+            actorUserId: audit.userId,
+            actor: audit.user,
+            createdAt: audit.createdAt,
+            previousState: oldValue?.reviewStatus ?? oldValue?.reviewState,
+            newState: newValue?.reviewStatus ?? newValue?.reviewState,
+          },
+        ],
+      });
+    }
+
+    return [...byId.values()];
+  }
+
+  private asExceptionState(value: unknown): UnrosteredExceptionState | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const candidate = value as Partial<UnrosteredExceptionState>;
+    if (candidate.outcome !== 'UNROSTERED' || !candidate.exceptionId) {
+      return null;
+    }
+
+    const reviewStatus = candidate.reviewStatus ?? candidate.reviewState ?? 'REQUIRES_REVIEW';
+    return {
+      ...candidate,
+      reviewStatus,
+      reviewState: candidate.reviewState ?? reviewStatus,
+    } as UnrosteredExceptionState;
   }
 
   private getScheduledWindow(date: Date, assignment: ReconciliationSnapshot) {

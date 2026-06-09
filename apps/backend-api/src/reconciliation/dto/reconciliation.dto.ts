@@ -55,6 +55,19 @@ export class ReconciliationApprovalDTO {
   reason: string;
 }
 
+export class UnrosteredExceptionReviewDTO {
+  @IsString()
+  action: string;
+
+  @IsString()
+  reason: string;
+}
+
+export class UnrosteredExceptionOverrideDTO {
+  @IsString()
+  reason: string;
+}
+
 export interface PayrollReadyRecordDTO {
   reconciliationLogId: string;
   tenantId: string;
@@ -78,6 +91,7 @@ export interface PayrollReadyRecordDTO {
 export interface ReconciliationResultDTO {
   reconciliationLog: unknown;
   payrollReadyRecord: PayrollReadyRecordDTO | null;
+  exception?: unknown;
   summary: {
     tenantId: string;
     userId: string;

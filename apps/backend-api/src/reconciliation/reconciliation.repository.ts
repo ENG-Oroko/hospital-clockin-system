@@ -6,9 +6,34 @@ export interface ReconciliationAuditInput {
   actorUserId: string;
   actionType: string;
   justification: string;
+  targetLogId?: string;
   oldValues?: unknown;
   newValues?: unknown;
 }
+
+export interface UnrosteredExceptionLogInput {
+  exceptionId: string;
+  tenantId: string;
+  employeeId: string;
+  attendanceDate: string;
+  attendanceLogIds: string[];
+  devices: Array<{
+    id: string;
+    name?: string | null;
+    serialCode?: string | null;
+  }>;
+  outcome: 'UNROSTERED';
+  reviewState: string;
+  reason: string;
+}
+
+export const UNROSTERED_EXCEPTION_ACTIONS = [
+  'UNROSTERED_EXCEPTION_CREATED',
+  'UNROSTERED_EXCEPTION_REVIEWED',
+  'UNROSTERED_EXCEPTION_OVERRIDE_APPROVED',
+  'UNROSTERED_EXCEPTION_REPROCESSED',
+  'UNROSTERED_EXCEPTION_CLEARED',
+] as const;
 
 @Injectable()
 export class ReconciliationRepository {
@@ -19,6 +44,8 @@ export class ReconciliationRepository {
       where: {
         tenantId,
         isResolved: true,
+        isFlagged: false,
+        exceptionReason: null,
         rosterAssignment: {
           date: {
             gte: startDate,
@@ -80,6 +107,75 @@ export class ReconciliationRepository {
     });
   }
 
+  findAttendanceLogsForUserDate(tenantId: string, employeeId: string, date: Date) {
+    const start = new Date(date);
+    const end = new Date(date);
+    end.setUTCHours(23, 59, 59, 999);
+
+    return this.db.attendanceLog.findMany({
+      where: {
+        tenantId,
+        userId: employeeId,
+        timestamp: { gte: start, lte: end },
+      },
+      include: {
+        device: {
+          select: {
+            id: true,
+            name: true,
+            serialCode: true,
+          },
+        },
+      },
+      orderBy: { timestamp: 'asc' },
+    });
+  }
+
+  findUnrosteredExceptionAudits(tenantId: string) {
+    return this.db.attendanceAudit.findMany({
+      where: {
+        tenantId,
+        actionType: { in: [...UNROSTERED_EXCEPTION_ACTIONS] },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  findUnrosteredExceptionAuditById(tenantId: string, exceptionId: string) {
+    return this.db.attendanceAudit.findMany({
+      where: {
+        tenantId,
+        actionType: { in: [...UNROSTERED_EXCEPTION_ACTIONS] },
+        OR: [
+          { id: exceptionId },
+          { oldValues: { path: ['exceptionId'], equals: exceptionId } as any },
+          { newValues: { path: ['exceptionId'], equals: exceptionId } as any },
+        ],
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   upsertAssignmentResult(tenantId: string, assignmentId: string, data: any) {
     return this.db.reconciliationLog.upsert({
       where: { rosterAssignmentId: assignmentId },
@@ -122,6 +218,7 @@ export class ReconciliationRepository {
       data: {
         tenantId: input.tenantId,
         userId: input.actorUserId,
+        targetLogId: input.targetLogId,
         actionType: input.actionType,
         justification: input.justification,
         oldValues: input.oldValues as any,

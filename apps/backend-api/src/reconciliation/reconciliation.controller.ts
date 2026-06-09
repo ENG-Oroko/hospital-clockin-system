@@ -12,6 +12,8 @@ import {
   ReconciliationOverrideDTO,
   ReconciliationRequestDTO,
   ReprocessReconciliationDTO,
+  UnrosteredExceptionOverrideDTO,
+  UnrosteredExceptionReviewDTO,
 } from './dto/reconciliation.dto';
 import { ReconciliationService } from './reconciliation.service';
 
@@ -158,6 +160,51 @@ export class ReconciliationController {
       startDate ? new Date(startDate) : undefined,
       endDate ? new Date(endDate) : undefined,
     );
+  }
+
+  @Get('unrostered-exceptions')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
+  listUnrosteredExceptions(@TenantId() tenantId: string) {
+    return this.reconciliationService.listUnrosteredExceptions(tenantId);
+  }
+
+  @Get('unrostered-exceptions/:id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
+  getUnrosteredException(@TenantId() tenantId: string, @Param('id') exceptionId: string) {
+    return this.reconciliationService.getUnrosteredException(tenantId, exceptionId);
+  }
+
+  @Patch('unrostered-exceptions/:id/review')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
+  reviewUnrosteredException(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') exceptionId: string,
+    @Body() body: UnrosteredExceptionReviewDTO,
+  ) {
+    return this.reconciliationService.reviewUnrosteredException(tenantId, exceptionId, user.userId, body);
+  }
+
+  @Post('unrostered-exceptions/:id/reprocess')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER, UserRole.DEPT_HEAD, UserRole.SUPERVISOR)
+  reprocessUnrosteredException(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') exceptionId: string,
+    @Body() body: ReprocessReconciliationDTO,
+  ) {
+    return this.reconciliationService.reprocessUnrosteredException(tenantId, exceptionId, user.userId, body.reason);
+  }
+
+  @Patch('unrostered-exceptions/:id/override')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.HOSPITAL_ADMIN, UserRole.HR_MANAGER)
+  approveUnrosteredOverride(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') exceptionId: string,
+    @Body() body: UnrosteredExceptionOverrideDTO,
+  ) {
+    return this.reconciliationService.approveUnrosteredOverride(tenantId, exceptionId, user.userId, body);
   }
 
   @Post('reprocess')
