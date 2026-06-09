@@ -2,15 +2,18 @@ import {
   IsDateString,
   IsEnum,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUUID,
   MaxLength,
-  Validate,
 } from 'class-validator';
 import { LeaveType } from '../enums/leave-type.enum';
-import { Type } from 'class-transformer';
 
 export class CreateLeaveDto {
+  @IsUUID()
+  @IsOptional()
+  tenantId: string; // injected from JWT in controller
+
   @IsUUID()
   @IsNotEmpty()
   employeeId: string;
