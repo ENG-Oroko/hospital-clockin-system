@@ -23,6 +23,7 @@ model Tenant {
   reconciliationLogs        ReconciliationLog[]
   systemSetting             SystemSetting?
   leaveRequests             LeaveRequest[]
+  leaveBalances             LeaveBalance[]
   compiledReports           CompiledReport[]
   notificationLogs          NotificationLog[]
   payrollPeriods            PayrollPeriod[]

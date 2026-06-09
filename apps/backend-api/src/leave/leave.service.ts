@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
+import { PrismaService } from '../database/prisma.service';
 import { CreateLeaveDto } from './dto/create-leave.dto';
 import { UpdateLeaveStatusDto } from './dto/update-leave-status.dto';
 import { LeaveStatus } from './enums/leave-status.enum';
@@ -11,8 +11,7 @@ import { ILeave } from './interfaces/leave.interface';
 
 @Injectable()
 export class LeaveService {
-  constructor(private readonly db: DatabaseService) {}
-
+constructor(private readonly db: PrismaService) {}
   private mapToILeave(record: any): ILeave {
     return {
       id: record.id,
@@ -37,7 +36,8 @@ export class LeaveService {
       throw new BadRequestException('End date must be after start date');
     }
 
-    const record = await this.db.leaveRequest.create({
+    const record = await this.db.client.leaveRequest
+    .create({
       data: {
         tenantId: dto.tenantId,
         employeeId: dto.employeeId,
@@ -53,7 +53,7 @@ export class LeaveService {
   }
 
   async getAllLeaves(tenantId: string): Promise<ILeave[]> {
-    const records = await this.db.leaveRequest.findMany({
+    const records = await this.db.client.leaveRequest.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
     });
@@ -61,7 +61,7 @@ export class LeaveService {
   }
 
   async getLeaveById(tenantId: string, id: string): Promise<ILeave> {
-    const record = await this.db.leaveRequest.findFirst({
+    const record = await this.db.client.leaveRequest.findFirst({
       where: { id, tenantId },
     });
 
@@ -76,7 +76,7 @@ export class LeaveService {
     tenantId: string,
     employeeId: string,
   ): Promise<ILeave[]> {
-    const records = await this.db.leaveRequest.findMany({
+    const records = await this.db.client.leaveRequest.findMany({
       where: { tenantId, employeeId },
       orderBy: { createdAt: 'desc' },
     });
@@ -87,7 +87,7 @@ export class LeaveService {
     tenantId: string,
     status: LeaveStatus,
   ): Promise<ILeave[]> {
-    const records = await this.db.leaveRequest.findMany({
+    const records = await this.db.client.leaveRequest.findMany({
       where: { tenantId, status },
       orderBy: { createdAt: 'desc' },
     });
@@ -107,7 +107,7 @@ export class LeaveService {
       );
     }
 
-    const updated = await this.db.leaveRequest.update({
+    const updated = await this.db.client.leaveRequest.update({
       where: { id },
       data: {
         status: dto.status,
@@ -138,7 +138,7 @@ export class LeaveService {
       );
     }
 
-    const updated = await this.db.leaveRequest.update({
+    const updated = await this.db.client.leaveRequest.update({
       where: { id },
       data: {
         status: LeaveStatus.CANCELLED,
@@ -151,12 +151,12 @@ export class LeaveService {
 
   async deleteLeave(tenantId: string, id: string): Promise<void> {
     await this.getLeaveById(tenantId, id);
-    await this.db.leaveRequest.delete({ where: { id } });
+    await this.db.client.leaveRequest.delete({ where: { id } });
   }
 
   // Used by AttendanceProcessorService to mark ON_LEAVE status
   async isUserOnLeave(userId: string, date: Date): Promise<boolean> {
-    const count = await this.db.leaveRequest.count({
+    const count = await this.db.client.leaveRequest.count({
       where: {
         employeeId: userId,
         status: LeaveStatus.APPROVED,

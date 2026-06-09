@@ -1,9 +1,3 @@
-enum Role {
-  SUPER_ADMIN
-  HOSPITAL_ADMIN
-  DEPT_HEAD
-  EMPLOYEE
-}
 
 model User {
   id               String  @id @default(uuid()) @db.Uuid
@@ -38,6 +32,7 @@ model User {
   employeeAudits            EmployeeAudit[]           @relation("EmployeeAuditEmployee")
   employeeAuditActions      EmployeeAudit[]           @relation("EmployeeAuditActor")
   leaveRequests             LeaveRequest[]
+  leaveBalances             LeaveBalance[]
   compiledReports           CompiledReport[]
   payslips                  Payslip[]
   rosterAssignments         RosterAssignment[]
