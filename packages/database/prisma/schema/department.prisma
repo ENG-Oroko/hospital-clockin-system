@@ -1,18 +1,1 @@
-model Department {
-  id                String             @id @default(uuid()) @db.Uuid
-  tenantId          String             @map("tenant_id") @db.Uuid
-  name              String             @db.VarChar(100)
-  code              String             @db.VarChar(20)
-  /// Dynamic departmental-level operational rule sets (e.g., specific grace periods, break rules)
-  /// Structure: { "gracePeriodMinutes": 0, "autoDeductBreakMinutes": 30 }
-  rules             Json               @default("{}") @map("rules")
-  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
-  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  rosterAssignments RosterAssignment[]
-  users             User[]
 
-  @@unique([tenantId, code])
-  @@index([tenantId])
-  @@map("departments")
-}

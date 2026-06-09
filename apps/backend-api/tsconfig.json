@@ -23,6 +23,7 @@
       "@chronos/database/*": ["../../packages/database/src/*"],
       "@chronos/types-common": ["../../packages/types-common/src"],
       "@chronos/types-common/*": ["../../packages/types-common/src/*"]
+      
     },
     "strictNullChecks": false,
     "noImplicitAny": false,

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { NotificationGateway } from './gateways/notification.gateway';
+import { NotificationsGateway } from './gateways/notifications.gateway';
 import { AttendanceGateway } from './gateways/attendance.gateway';
 import { WebSocketService } from './services/websocket.service';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -14,13 +14,13 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [
     NotificationsModule,
   ],
-  providers: [
-    NotificationGateway,
+  providers: [  
+    NotificationsGateway,
     AttendanceGateway,
     WebSocketService,
   ],
   exports: [
-    NotificationGateway,
+    NotificationsGateway,
     AttendanceGateway,
     WebSocketService,
   ],

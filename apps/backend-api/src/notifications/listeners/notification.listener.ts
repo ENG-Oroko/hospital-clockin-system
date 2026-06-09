@@ -402,3 +402,4 @@ export class NotificationListener {
       this.logger.error(`Integration failure notification failed: ${error.message}`);
     }
   }
+}

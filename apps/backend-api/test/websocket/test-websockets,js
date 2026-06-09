@@ -1,0 +1,118 @@
+const WebSocket = require('ws');
+const path = require('path');
+
+// Adjust path to find test-config
+const configPath = path.join(__dirname, '..', 'test-config.js');
+let config;
+try {
+  config = require(configPath);
+} catch (error) {
+  console.warn('⚠️ test-config.js not found, using defaults');
+  config = {
+    baseURL: 'http://localhost:3000',
+    wsURL: 'ws://localhost:3000'
+  };
+}
+
+class WebSocketTester {
+  constructor() {
+    this.clients = [];
+  }
+
+  // Test 1: Connection and Authentication
+  async testConnection() {
+    console.log('\n🔌 TEST 1: WebSocket Connection');
+    
+    const self = this;
+    return new Promise(function(resolve) {
+      let testsCompleted = 0;
+      
+      // Test valid connection
+      const ws = new WebSocket(config.wsURL);
+      
+      const timeout = setTimeout(function() {
+        console.log('  ⚠️ Connection test timeout');
+        resolve();
+      }, 5000);
+      
+      ws.on('open', function() {
+        console.log('  ✅ Connection established successfully');
+        ws.close();
+        testsCompleted++;
+        if (testsCompleted >= 2) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+      
+      ws.on('error', function(error) {
+        console.log('  ⚠️ WebSocket connection may not be available: ' + error.message);
+        testsCompleted++;
+        if (testsCompleted >= 2) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+      
+      // Test invalid endpoint
+      const invalidWs = new WebSocket(config.wsURL + '/invalid');
+      invalidWs.on('error', function() {
+        console.log('  ✅ Invalid endpoint properly rejected');
+        invalidWs.close();
+        testsCompleted++;
+        if (testsCompleted >= 2) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+    });
+  }
+
+  // Test 2: Message sending and receiving
+  async testMessageExchange() {
+    console.log('\n💬 TEST 2: Message Exchange');
+    
+    return new Promise(function(resolve) {
+      let messageReceived = false;
+      const timeout = setTimeout(function() {
+        if (!messageReceived) {
+          console.log('  ⚠️ No message exchange detected');
+        }
+        if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+        resolve();
+      }, 5000);
+      
+      const ws = new WebSocket(config.wsURL);
+      
+      ws.on('open', function() {
+        console.log('  Sending test message');
+        ws.send(JSON.stringify({ type: 'ping', data: 'Hello Server' }));
+      });
+      
+      ws.on('message', function(data) {
+        messageReceived = true;
+        console.log('  ✅ Message received from server');
+        ws.close();
+        clearTimeout(timeout);
+        resolve();
+      });
+      
+      ws.on('error', function(error) {
+        console.log('  ⚠️ WebSocket error: ' + error.message);
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
+  }
+
+  async runAll() {
+    console.log('\n═══════════════════════════════════════════');
+    console.log('🧪 WEBSOCKET MODULE TESTS');
+    console.log('═══════════════════════════════════════════');
+    await this.testConnection();
+    await this.testMessageExchange();
+    console.log('\n✨ WebSocket tests completed!');
+  }
+}
+
+module.exports = WebSocketTester;

@@ -29,11 +29,11 @@ interface ConnectedClient {
   },
   namespace: 'notifications',
 })
-export class NotificationGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  private readonly logger = new Logger(NotificationGateway.name);
+  private readonly logger = new Logger(NotificationsGateway.name);
   private connectedClients: Map<string, ConnectedClient> = new Map();
 
   constructor(

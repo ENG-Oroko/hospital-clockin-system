@@ -1,14 +1,15 @@
 // src/websocket/services/websocket.service.ts
 import { Injectable, Logger } from '@nestjs/common';
-import { NotificationGateway } from '../gateways/notification.gateway';
+import { NotificationsGateway } from '../gateways/notifications.gateway';
 import { NotificationsService } from '../../notifications/services/notification.service';
+import { NotificationPriority, NotificationTriggerEvent, NotificationChannel } from 'src/notifications/types/notification.types';
 
 @Injectable()
 export class WebSocketService {
   private readonly logger = new Logger(WebSocketService.name);
 
   constructor(
-    private readonly notificationGateway: NotificationGateway,
+    private readonly notificationGateway: NotificationsGateway,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -27,8 +28,9 @@ export class WebSocketService {
         userId,
         title,
         body,
-        channel: 'IN_APP',
-       // recipient: userId,
+        channel: NotificationChannel.IN_APP,
+        priority: NotificationPriority.HIGH,
+        triggerEvent: NotificationTriggerEvent.CLOCK_IN,
       });
 
       // Send real-time via WebSocket

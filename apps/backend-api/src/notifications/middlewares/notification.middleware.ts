@@ -2,6 +2,8 @@
 import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 // ==================== Request Tracking Middleware ====================
 
@@ -60,7 +62,7 @@ export class NotificationRateLimitMiddleware implements NestMiddleware {
   };
 
   use(req: Request, res: Response, next: NextFunction) {
-    const userId = req['user']?.id || req.headers['x-user-id'] as string || 'anonymous';
+    const userId = (req['user'] as any)?.id || req.headers['x-user-id'] as string || 'anonymous';
     const ip = req.ip || req.connection.remoteAddress || 'unknown';
     const endpoint = req.path;
     
@@ -161,6 +163,11 @@ export class NotificationRateLimitMiddleware implements NestMiddleware {
 export class NotificationAuthMiddleware implements NestMiddleware {
   private readonly logger = new Logger(NotificationAuthMiddleware.name);
 
+  constructor(
+    private readonly jwtService?: JwtService,
+    private readonly configService?: ConfigService,
+  ) {}
+
   async use(req: Request, res: Response, next: NextFunction) {
     const authHeader = req.headers.authorization;
     
@@ -184,9 +191,17 @@ export class NotificationAuthMiddleware implements NestMiddleware {
     }
     
     try {
-      // Verify token and attach user to request
-      // This would integrate with your auth service
-      const user = await this.verifyToken(token);
+      // Use JWT service if available
+      let user: any;
+      
+      if (this.jwtService) {
+        user = await this.jwtService.verifyAsync(token, {
+          secret: this.configService?.get('JWT_SECRET'),
+        });
+      } else {
+        // Fallback to manual verification
+        user = await this.verifyToken(token);
+      }
       
       if (!user) {
         return res.status(401).json({
@@ -199,7 +214,10 @@ export class NotificationAuthMiddleware implements NestMiddleware {
       req['user'] = user;
       next();
     } catch (error) {
-      this.logger.error(`Token verification failed: ${error.message}`);
+      // Fixed: Safe error message extraction
+      const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
+      this.logger.error(`Token verification failed: ${errorMessage}`);
+      
       return res.status(401).json({
         statusCode: 401,
         message: 'Authentication failed',
@@ -209,20 +227,11 @@ export class NotificationAuthMiddleware implements NestMiddleware {
   }
 
   private async verifyToken(token: string): Promise<any> {
-    // Implement token verification with your auth service
-    // This is a placeholder
-    // For now, accept any token in development
-    if (process.env.NODE_ENV === 'development') {
-      return { id: 'test-user', tenantId: 'test-tenant' };
-    }
-    
-    // In production, verify with JWT or auth service
-    // const payload = await this.jwtService.verifyAsync(token);
-    // return payload;
-    
-    return null;
+    // Implement your token verification logic
+    throw new Error('JWT service not configured');
   }
 }
+
 
 // ==================== Request Validation Middleware ====================
 
@@ -314,7 +323,7 @@ export class NotificationLoggingMiddleware implements NestMiddleware {
       url: req.url,
       ip: req.ip,
       userAgent: req.headers['user-agent'],
-      userId: req['user']?.id,
+      userId: (req['user'] as any)?.id,
     });
     
     // Log response
@@ -365,9 +374,8 @@ export class NotificationUserContextMiddleware implements NestMiddleware {
   private readonly logger = new Logger(NotificationUserContextMiddleware.name);
 
   async use(req: Request, res: Response, next: NextFunction) {
-    const userId = req['user']?.id;
-    const tenantId = req['user']?.tenantId || req.headers['x-tenant-id'] as string;
-    
+
+    const userId = (req['user'] as any)?.id;    const tenantId = (req['user'] as any)?.tenantId || req.headers['x-tenant-id'] as string;
     if (!userId) {
       // For public endpoints, continue without user context
       if (this.isPublicEndpoint(req.path)) {

@@ -9,7 +9,6 @@ import {
   Body,
   Param,
   Query,
-  UseGuards,
   Req,
   HttpStatus,
   HttpCode,
@@ -37,24 +36,13 @@ import { UpdatePreferenceDto } from '../dto/update-preference.dto';
 import {PaginatedNotificationResponseDto, NotificationSummaryDto , NotificationResponseDto}
  from '../dto/notification-response.dto'
 // Correct imports
-import {
-  DigestStatisticsDto,
-  DigestGenerationOptions,
-  PaginatedDigestResponseDto,
-  NotificationDigestResponseDto,
-  AddDigestItemsDto,
-  UpdateNotificationDigestDto,
-  CreateNotificationDigestDto,
-  NotificationDigestEntity,
-} from '../entities/notification-digest.entity';
+
 import {
   
-  UpdateNotificationPreferenceDto,
   BulkUpdateNotificationPreferenceDto,
   NotificationPreferenceResponseDto,
 } from '../entities/notification-preference.entity';
 import {
-  CreateUserNotificationSettingsDto,
   UpdateUserNotificationSettingsDto,
   UserNotificationSettingsResponseDto,
 } from '../entities/user-notification-settings.entity';
@@ -334,7 +322,7 @@ async getPreferenceSummary(@Req() req: any): Promise<any> {
 @ApiOperation({ summary: 'Bulk update notification preferences (legacy)' })
 @ApiResponse({ status: 200, type: [NotificationPreferenceResponseDto] })
 async bulkUpdatePreferencesLegacy(
-  @Body() dto: { preferences: Array<{ type: string; enabled?: boolean; channels?: string[] }> },
+  @Body() dto: { preferences: UpdatePreferenceDto[] }, // ✅ Fixed: Use proper DTO type
   @Req() req: any,
 ): Promise<NotificationPreferenceResponseDto[]> {
   const userId = req.user?.id;
@@ -391,7 +379,28 @@ async getUserSettings(@Req() req: any): Promise<UserNotificationSettingsResponse
   const userId = req.user?.id;
   const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
   
-  return this.preferenceService.getUserSettings(tenantId, userId);
+  const settings = await this.preferenceService.getUserSettings(tenantId, userId);
+  
+  // Ensure all required fields match UserNotificationSettingsResponseDto
+  return {
+    id: `${userId}_settings`, // Generate an ID since Prisma doesn't have id in this context
+    userId: settings.userId,
+    tenantId: settings.tenantId,
+    quietHoursEnabled: settings.quietHoursEnabled,
+    quietHoursStart: settings.quietHoursStart,
+    quietHoursEnd: settings.quietHoursEnd,
+    digestEnabled: settings.digestEnabled,
+    digestFrequency: settings.digestFrequency,
+    emailDigest: settings.emailDigest,
+    pushDigest: settings.pushDigest,
+    smsEnabled: settings.smsEnabled,
+    emailEnabled: settings.emailEnabled,
+    inAppEnabled: settings.inAppEnabled,
+    timezone: settings.timezone,
+    language: settings.language,
+    createdAt: settings.createdAt,
+    updatedAt: settings.updatedAt,
+  };
 }
 
 @Put('settings')
@@ -421,9 +430,11 @@ async updateQuietHours(
   await this.preferenceService.updateQuietHours(
     tenantId,
     userId,
-    dto.enabled,
-    dto.start,
-    dto.end,
+    {
+      enabled: dto.enabled,
+      start: dto.start,
+      end: dto.end
+    }
   );
   return { success: true };
 }
@@ -438,14 +449,14 @@ async updateDigestSettings(
   const userId = req.user?.id;
   const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
   
-  await this.preferenceService.updateDigestSettings(
-    tenantId,
-    userId,
-    dto.enabled,
-    dto.frequency,
-    dto.emailDigest,
-    dto.pushDigest,
-  );
+  // Fix: Use the correct property names from dto
+  await this.preferenceService.updateUserSettings(tenantId, userId, {
+    digestEnabled: dto.enabled,
+    digestFrequency: dto.frequency,
+    emailDigest: dto.emailDigest,  // Changed from dto.emailEnabled
+    pushDigest: dto.pushDigest      // Changed from dto.pushEnabled
+  });
+  
   return { success: true };
 }
 
@@ -468,7 +479,7 @@ async updateDigestSettings(
   ): Promise<{ success: boolean; count: number }> {
     const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
     
-    const count = await this.notificationService.broadcast(
+    const result = await this.notificationService.broadcast(
       tenantId,
       dto.userIds,
       {
@@ -479,6 +490,11 @@ async updateDigestSettings(
         triggerEvent: dto.triggerEvent,
       },
     );
+    
+    // Handle if result is a number or an object
+    const count = typeof result === 'number' 
+      ? result 
+      : (result as any)?.count || (result as any)?.successCount || 0;
     
     return { success: true, count };
   }
@@ -515,7 +531,13 @@ async updateDigestSettings(
   ): Promise<{ deletedCount: number }> {
     const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
     
-    const deletedCount = await this.notificationService.cleanup(tenantId, daysOld);
+    const result = await this.notificationService.cleanup(tenantId, daysOld);
+    
+    // Handle if result is a number or an object
+    const deletedCount = typeof result === 'number' 
+      ? result 
+      : (result as any)?.deletedCount || (result as any)?.count || 0;
+    
     return { deletedCount };
   }
 

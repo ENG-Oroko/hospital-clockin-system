@@ -1,5 +1,10 @@
-// Location: apps/backend-api/src/database/prisma.service.ts
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { db } from '@chronos/database';
 import { TenantStorage } from './tenant.storage';
@@ -7,17 +12,65 @@ import { TenantStorage } from './tenant.storage';
 @Injectable()
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
-  
+
   private static readonly TENANT_KEY = 'tenantId';
   private static readonly GLOBAL_MODELS = ['Tenant', 'LicenseKey', 'SystemAuditLog'];
-  private static readonly MUTATION_OPERATIONS = ['create', 'update', 'upsert', 'delete', 'createMany', 'updateMany', 'deleteMany'];
+  private static readonly MUTATION_OPERATIONS = [
+    'create', 'update', 'upsert', 'delete',
+    'createMany', 'updateMany', 'deleteMany',
+  ];
 
   public readonly rawClient: PrismaClient = db;
   public readonly client: ReturnType<typeof this.createSecureClient>;
 
   constructor() {
+    // PrismaService no longer extends PrismaClient — no super() needed.
+    // All model access goes through this.client (tenant-isolated) or
+    // this.rawClient (bypass — only for system/global queries).
     this.client = this.createSecureClient();
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Model proxy getters
+  //
+  // These forward this.db.modelName → this.client.modelName so every service
+  // can keep writing `this.db.user.findFirst(...)` without changing anything.
+  // All calls still go through the Zero-Trust isolation engine on `this.client`.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Core
+  get user()                    { return this.client.user; }
+  get tenant()                  { return this.client.tenant; }
+  get session()                 { return this.client.session; }
+  get device()                  { return this.client.device; }
+  get department()              { return this.client.department; }
+
+  // Attendance
+  get attendanceLog()           { return this.client.attendanceLog; }
+  get attendanceSummary()       { return this.client.attendanceSummary; }
+  get attendanceAudit()         { return this.client.attendanceAudit; }
+
+  // Roster & Leave
+  get rosterAssignment()        { return this.client.rosterAssignment; }
+  get shiftTemplate()           { return this.client.shiftTemplate; }
+  get leaveRequest()            { return this.client.leaveRequest; }
+
+  // Notifications
+  get notificationLog()         { return this.client.notificationLog; }
+  get notificationPreference()  { return this.client.notificationPreference; }
+  get userSettings()            { return this.client.userSettings; }
+  get userNotificationSettings() { return this.client.userNotificationSettings; }
+
+  // Payroll & reporting
+
+  // $transaction proxy — routes through the secured client's transaction handler
+  get $transaction() {
+    return this.client.$transaction.bind(this.client);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Zero-Trust isolation engine
+  // ─────────────────────────────────────────────────────────────────────────
 
   private createSecureClient() {
     const baseClient = this.rawClient;
@@ -28,55 +81,39 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     return baseClient.$extends({
       name: 'ChronosZeroTrustIsolationEngine',
       client: {
-        /**
-         * Intercepts transaction lifecycles to bind the session parameters to the current connection socket.
-         */
-        // Location: apps/backend-api/src/database/prisma.service.ts (Fully Hardened $transaction)
+        async $transaction<T>(this: any, args: any): Promise<T> {
+          const tenantId = TenantStorage.getTenantId();
 
-async $transaction<T>(this: any, args: any): Promise<T> {
-  const tenantId = TenantStorage.getTenantId();
-  
-  // Exit Path 1: No active tenant context - pass through directly with explicit type assertion
-  if (!tenantId) {
-    const directResult = await baseClient.$transaction(args);
-    return directResult as unknown as T;
-  }
+          if (!tenantId) {
+            const directResult = await baseClient.$transaction(args);
+            return directResult as unknown as T;
+          }
 
-  // Case A: Interactive Transaction (Callback pattern)
-  if (typeof args === 'function') {
-    let transactionPromise: Promise<any>;
-    
-    TenantStorage.run(tenantId, () => {
-      transactionPromise = baseClient.$transaction(async (tx) => {
-        await tx.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true);`;
-        return args(tx);
-      });
-    }, true);
-    
-    const interactiveResult = await transactionPromise!;
-    return interactiveResult as unknown as T;
-  }
+          if (typeof args === 'function') {
+            let transactionPromise: Promise<any>;
+            TenantStorage.run(tenantId, () => {
+              transactionPromise = baseClient.$transaction(async (tx) => {
+                await tx.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true);`;
+                return args(tx);
+              });
+            }, true);
+            return (await transactionPromise!) as unknown as T;
+          }
 
-  // Case B: Sequential Batch Transaction (Array pattern)
-  if (Array.isArray(args)) {
-    let batchPromise: Promise<any[]>;
-    
-    TenantStorage.run(tenantId, () => {
-      const setConfigPromise = baseClient.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true);`;
-      batchPromise = baseClient.$transaction([setConfigPromise, ...args]);
-    }, true);
+          if (Array.isArray(args)) {
+            let batchPromise: Promise<any[]>;
+            TenantStorage.run(tenantId, () => {
+              const setConfigPromise = baseClient.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true);`;
+              batchPromise = baseClient.$transaction([setConfigPromise, ...args]);
+            }, true);
+            const resolvedBatch = await batchPromise!;
+            return resolvedBatch.slice(1) as unknown as T;
+          }
 
-    const resolvedBatch = await batchPromise!;
-    
-    // Slice off our injected set_config promise result at index 0
-    return resolvedBatch.slice(1) as unknown as T;
-  }
-
-  // Exit Path 2: Fallthrough edge case safeguard
-  const fallbackResult = await baseClient.$transaction(args);
-  return fallbackResult as unknown as T;
-}
-},
+          const fallbackResult = await baseClient.$transaction(args);
+          return fallbackResult as unknown as T;
+        },
+      },
       query: {
         $allModels: {
           async $allOperations({ model, operation, args, query }) {
@@ -84,32 +121,26 @@ async $transaction<T>(this: any, args: any): Promise<T> {
             const isRlsSet = TenantStorage.isRlsSet();
             const isGlobal = globalModels.includes(model);
 
-            // Fail-Closed Validation Guard
             if (!tenantId) {
               if (isGlobal) return query(args);
-              
               throw new InternalServerErrorException({
                 error: 'Isolation Boundary Breach',
                 message: `Aborting execution. Unauthenticated context access denied for entity "${model}".`,
               });
             }
 
-            // Safe structured deep copy preserves complex data objects (Dates, Buffers, BigInts)
             const securedArgs = PrismaService.cloneQueryPayload(args ?? {});
 
-            // Intercept and rewrite Read Operations
             if (!isGlobal && !mutationOperations.includes(operation)) {
               securedArgs.where = securedArgs.where || {};
               PrismaService.injectTenantPredicate(securedArgs.where, tenantId, tenantKey);
               PrismaService.traverseAndHardenAST(securedArgs, tenantId, tenantKey);
             }
 
-            // Intercept and rewrite Write Operations (Injections for inline relation writes)
             if (!isGlobal && mutationOperations.includes(operation)) {
               PrismaService.traverseAndHardenAST(securedArgs, tenantId, tenantKey);
             }
 
-            // Standardize uniquely-constrained point lookups to prevent engine validation failures
             let dynamicQuery = query;
             let finalArgs = securedArgs;
             if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
@@ -118,21 +149,13 @@ async $transaction<T>(this: any, args: any): Promise<T> {
               dynamicQuery = (innerArgs: any) => (baseClient as any)[modelProperty][targetOp](innerArgs);
             }
 
-            // Execute within an established transaction connection scope
-            if (isRlsSet) {
-              return dynamicQuery(finalArgs);
-            }
+            if (isRlsSet) return dynamicQuery(finalArgs);
 
-            // Promote standalone commands to a transaction pair to restrict session configuration scope
-            try {
-              const [_, result] = await baseClient.$transaction([
-                baseClient.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true);`,
-                dynamicQuery(finalArgs)
-              ]);
-              return result;
-            } catch (error) {
-              throw error;
-            }
+            const [, result] = await baseClient.$transaction([
+              baseClient.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true);`,
+              dynamicQuery(finalArgs),
+            ]);
+            return result;
           },
         },
       },
@@ -141,16 +164,13 @@ async $transaction<T>(this: any, args: any): Promise<T> {
 
   private static traverseAndHardenAST(node: any, tenantId: string, tenantKey: string): void {
     if (!node || typeof node !== 'object') return;
-
     if (Array.isArray(node)) {
       for (const element of node) this.traverseAndHardenAST(element, tenantId, tenantKey);
       return;
     }
-
     for (const key of Object.keys(node)) {
       const value = node[key];
       if (!value || typeof value !== 'object') continue;
-
       if ((key === 'include' || key === 'select') && typeof value === 'object') {
         for (const relKey of Object.keys(value)) {
           if (value[relKey] === true && key === 'include') {
@@ -185,28 +205,18 @@ async $transaction<T>(this: any, args: any): Promise<T> {
     }
   }
 
-  /**
-   * Custom structured deep cloner engineered to protect Prisma native types 
-   * from primitive string serialization corruption.
-   */
   private static cloneQueryPayload(source: any): any {
     if (source === null || typeof source !== 'object') return source;
     if (source instanceof Date) return new Date(source.getTime());
     if (source instanceof Buffer) return Buffer.from(source);
     if (typeof source === 'bigint') return BigInt(source.toString());
-
     if (Array.isArray(source)) {
       const cloneArr = new Array(source.length);
-      for (let i = 0; i < source.length; i++) {
-        cloneArr[i] = this.cloneQueryPayload(source[i]);
-      }
+      for (let i = 0; i < source.length; i++) cloneArr[i] = this.cloneQueryPayload(source[i]);
       return cloneArr;
     }
-
     const cloneObj = Object.create(Object.getPrototypeOf(source));
-    for (const key of Object.keys(source)) {
-      cloneObj[key] = this.cloneQueryPayload(source[key]);
-    }
+    for (const key of Object.keys(source)) cloneObj[key] = this.cloneQueryPayload(source[key]);
     return cloneObj;
   }
 
