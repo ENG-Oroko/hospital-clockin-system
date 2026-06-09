@@ -1,50 +1,25 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "rootDir": "./",
-    "outDir": "./dist",
-    "skipLibCheck": true,
-    
-    // NestJS & Dependency Injection Configuration
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    
-    // Build Artifacts & Source Mapping
-    "declaration": true,
+    "target": "ES2023",
     "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
     "incremental": true,
-    "removeComments": true,
-    
-    // Testing Framework (Jest) Compatibility
-    "isolatedModules": true,
-    "types": [
-      "node",
-      "jest"
-    ],
-    
-    // Internal Path Mapping
-    "paths": {
-      "src/*": ["./src/*"]
-    },
-    
-    // Type Checking Laxity Constraints
-    "strictNullChecks": false,
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    
-    // Code Quality Rules
-    "forceConsistentCasingInFileNames": false,
-    "noFallthroughCasesInSwitch": true
-  },
-  "include": [
-    "src/**/*",
-    "test/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+    "noFallthroughCasesInSwitch": false
+  }
 }
