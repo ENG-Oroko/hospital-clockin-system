@@ -8,7 +8,7 @@ export class AttendanceProcessorService {
   private readonly logger = new Logger(AttendanceProcessorService.name);
 
   constructor(
-    private readonly PrismaService: PrismaService,
+    private readonly db: PrismaService,
     private readonly leaveService: LeaveService,
   ) {}
 
@@ -43,7 +43,7 @@ export class AttendanceProcessorService {
     endOfDay.setHours(23, 59, 59, 999);
 
     // 1. Find roster assignment for this user on this date
-    const roster = await this.PrismaService.rosterAssignment.findFirst({
+    const roster = await this.db.rosterAssignment.findFirst({
       where: {
         userId,
         tenantId,
