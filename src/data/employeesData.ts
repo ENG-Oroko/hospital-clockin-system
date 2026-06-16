@@ -1,0 +1,20 @@
+// src/data/employeesData.ts
+import { Employee } from './types'
+
+export const employeesData: Employee[] = [
+  { id: 1,  name: 'Dr. R. Sharma',    initials: 'RS', role: 'Senior Surgeon',       department: 'Surgery',    status: 'active',    joinDate: 'Jan 12, 2018', email: 'r.sharma@citycare.co.ke',   phone: '+254 700 111 001', avatarColor: '#2563EB', salary: 280000 },
+  { id: 2,  name: 'Nurse A. Patel',   initials: 'AP', role: 'ICU Nurse',            department: 'ICU',        status: 'on-leave',  joinDate: 'Mar 5, 2020',  email: 'a.patel@citycare.co.ke',    phone: '+254 700 111 002', avatarColor: '#16A34A', salary: 95000  },
+  { id: 3,  name: 'Dr. M. Khan',      initials: 'MK', role: 'Emergency Physician',  department: 'Emergency',  status: 'active',    joinDate: 'Jul 19, 2019', email: 'm.khan@citycare.co.ke',     phone: '+254 700 111 003', avatarColor: '#EA580C', salary: 250000 },
+  { id: 4,  name: 'J. Desai',         initials: 'JD', role: 'Radiologist',          department: 'Radiology',  status: 'active',    joinDate: 'Feb 28, 2021', email: 'j.desai@citycare.co.ke',    phone: '+254 700 111 004', avatarColor: '#7C3AED', salary: 200000 },
+  { id: 5,  name: 'Dr. S. Gupta',     initials: 'SG', role: 'Cardiologist',         department: 'Surgery',    status: 'active',    joinDate: 'Sep 1, 2017',  email: 's.gupta@citycare.co.ke',    phone: '+254 700 111 005', avatarColor: '#0891B2', salary: 310000 },
+  { id: 6,  name: 'Nurse B. Rao',     initials: 'BR', role: 'Staff Nurse',          department: 'Nursing',    status: 'active',    joinDate: 'Jun 14, 2022', email: 'b.rao@citycare.co.ke',      phone: '+254 700 111 006', avatarColor: '#DC2626', salary: 85000  },
+  { id: 7,  name: 'T. Mehta',         initials: 'TM', role: 'Pharmacist',           department: 'Pharmacy',   status: 'inactive',  joinDate: 'Nov 3, 2019',  email: 't.mehta@citycare.co.ke',    phone: '+254 700 111 007', avatarColor: '#16A34A', salary: 120000 },
+  { id: 8,  name: 'Nurse P. Singh',   initials: 'PS', role: 'ICU Nurse',            department: 'ICU',        status: 'active',    joinDate: 'Apr 22, 2021', email: 'p.singh@citycare.co.ke',    phone: '+254 700 111 008', avatarColor: '#2563EB', salary: 90000  },
+  { id: 9,  name: 'Dr. A. Nair',      initials: 'AN', role: 'Emergency Physician',  department: 'Emergency',  status: 'active',    joinDate: 'Aug 9, 2020',  email: 'a.nair@citycare.co.ke',     phone: '+254 700 111 009', avatarColor: '#EA580C', salary: 240000 },
+  { id: 10, name: 'M. Iyer',          initials: 'MI', role: 'Admin Officer',        department: 'Admin',      status: 'active',    joinDate: 'Dec 1, 2016',  email: 'm.iyer@citycare.co.ke',     phone: '+254 700 111 010', avatarColor: '#2563EB', salary: 75000  },
+  { id: 11, name: 'Dr. P. Joshi',     initials: 'PJ', role: 'Orthopedic Surgeon',  department: 'Surgery',    status: 'on-leave',  joinDate: 'Oct 10, 2015', email: 'p.joshi@citycare.co.ke',    phone: '+254 700 111 011', avatarColor: '#7C3AED', salary: 295000 },
+  { id: 12, name: 'T. Kulkarni',      initials: 'TK', role: 'Pharmacist',          department: 'Pharmacy',   status: 'active',    joinDate: 'May 17, 2023', email: 't.kulkarni@citycare.co.ke', phone: '+254 700 111 012', avatarColor: '#16A34A', salary: 115000 },
+  { id: 13, name: 'Dr. L. Omondi',    initials: 'LO', role: 'Pediatrician',        department: 'Pediatrics', status: 'active',    joinDate: 'Mar 3, 2021',  email: 'l.omondi@citycare.co.ke',   phone: '+254 700 111 013', avatarColor: '#DB2777', salary: 230000 },
+  { id: 14, name: 'Nurse C. Wanjiru', initials: 'CW', role: 'Head Nurse',          department: 'Nursing',    status: 'active',    joinDate: 'Jan 8, 2015',  email: 'c.wanjiru@citycare.co.ke',  phone: '+254 700 111 014', avatarColor: '#0891B2', salary: 110000 },
+  { id: 15, name: 'Dr. F. Kimani',    initials: 'FK', role: 'Radiologist',         department: 'Radiology',  status: 'active',    joinDate: 'Jun 20, 2019', email: 'f.kimani@citycare.co.ke',   phone: '+254 700 111 015', avatarColor: '#D97706', salary: 195000 },
+]

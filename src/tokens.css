@@ -1,0 +1,101 @@
+/* src/tokens.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Semantic colors */
+  --color-info-bg: #dbeafe;
+  --color-info: #2563eb;
+  --color-success-bg: #dcfce7;
+  --color-success: #16a34a;
+  --color-warning-bg: #ffedd5;
+  --color-warning: #ea580c;
+  --color-danger-bg: #fee2e2;
+  --color-danger: #dc2626;
+
+  /* Neutrals */
+  --color-bg-page: #f5f6fa;
+  --color-bg-surface: #ffffff;
+  --color-bg-sidebar: #0f1b3d;
+  --color-border: #e5e7eb;
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-tertiary: #9ca3af;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* Radius */
+  --radius-card: 12px;
+  --radius-badge: 8px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --text-display: 24px;
+  --text-heading: 17px;
+  --text-stat: 30px;
+  --text-body: 14px;
+  --text-label: 13px;
+
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-family);
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  cursor: pointer;
+  font-family: var(--font-family);
+  border: none;
+  background: none;
+}
+
+a {
+  text-decoration: none;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
