@@ -4,14 +4,18 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import Card               from '../components/Card'
 import PageHeader         from '../components/PageHeader'
 import AttendanceHeatmap  from '../components/AttendanceHeatmap'
-import { lineChartData, departmentsData, employeesData } from '../data'
+import { lineChartData, employeesData, departmentsList } from '../data'
 
-const summaryByDept = departmentsData.map(d => {
+const summaryByDept = departmentsList.map(d => {
   const members = employeesData.filter(e => e.department === d.name)
-  const present = members.filter(e => e.status === 'active').length
-  const onLeave = members.filter(e => e.status === 'on-leave').length
-  const absent  = members.filter(e => e.status === 'inactive').length
-  return { dept: d.name, color: d.color, total: members.length, present, onLeave, absent }
+  return {
+    dept:    d.name,
+    color:   d.color,
+    total:   members.length,
+    present: members.filter(e => e.status === 'active').length,
+    onLeave: members.filter(e => e.status === 'on-leave').length,
+    absent:  members.filter(e => e.status === 'inactive').length,
+  }
 })
 
 const AttendancePage: React.FC = () => {
@@ -22,41 +26,32 @@ const AttendancePage: React.FC = () => {
     : summaryByDept.filter(r => r.dept === selectedDept)
 
   const totals = displayed.reduce((acc, r) => ({
-    total: acc.total + r.total,
-    present: acc.present + r.present,
-    onLeave: acc.onLeave + r.onLeave,
-    absent: acc.absent + r.absent,
+    total: acc.total + r.total, present: acc.present + r.present,
+    onLeave: acc.onLeave + r.onLeave, absent: acc.absent + r.absent,
   }), { total: 0, present: 0, onLeave: 0, absent: 0 })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <PageHeader title="Attendance" subtitle="Daily attendance view per department" />
 
-      {/* Department filter */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {['all', ...departmentsData.map(d => d.name)].map(d => (
-          <button
-            key={d}
-            onClick={() => setSelectedDept(d)}
-            style={{
-              padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 500,
+        {['all', ...departmentsList.map(d => d.name)].map(d => (
+          <button key={d} onClick={() => setSelectedDept(d)}
+            style={{ padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 500,
               background: selectedDept === d ? '#2563eb' : '#fff',
               color:      selectedDept === d ? '#fff'    : '#6b7280',
-              border:     `1px solid ${selectedDept === d ? '#2563eb' : '#e5e7eb'}`,
-            }}
-          >
+              border: `1px solid ${selectedDept === d ? '#2563eb' : '#e5e7eb'}` }}>
             {d === 'all' ? 'All Departments' : d}
           </button>
         ))}
       </div>
 
-      {/* KPI strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
         {[
-          { label: 'Total Staff',   value: totals.total,   color: '#2563eb', bg: '#dbeafe' },
-          { label: 'Present',       value: totals.present, color: '#16a34a', bg: '#dcfce7' },
-          { label: 'On Leave',      value: totals.onLeave, color: '#ea580c', bg: '#ffedd5' },
-          { label: 'Absent',        value: totals.absent,  color: '#dc2626', bg: '#fee2e2' },
+          { label: 'Total Staff', value: totals.total,   color: '#2563eb', bg: '#dbeafe' },
+          { label: 'Present',     value: totals.present, color: '#16a34a', bg: '#dcfce7' },
+          { label: 'On Leave',    value: totals.onLeave, color: '#ea580c', bg: '#ffedd5' },
+          { label: 'Absent',      value: totals.absent,  color: '#dc2626', bg: '#fee2e2' },
         ].map(k => (
           <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '18px 24px' }}>
             <p style={{ fontSize: 13, color: '#6b7280' }}>{k.label}</p>
@@ -65,43 +60,31 @@ const AttendancePage: React.FC = () => {
         ))}
       </div>
 
-      {/* Per-department breakdown */}
       <Card title="Attendance by Department">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {displayed.map((row, i) => {
             const pct = row.total > 0 ? Math.round((row.present / row.total) * 100) : 0
             return (
               <div key={row.dept} style={{ display: 'grid', gridTemplateColumns: '160px 1fr 80px 80px 80px 90px', alignItems: 'center', gap: 16, padding: '14px 0', borderBottom: i < displayed.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
-                {/* Dept name */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 10, height: 10, borderRadius: '50%', background: row.color, flexShrink: 0 }} />
                   <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{row.dept}</span>
                 </div>
-
-                {/* Progress bar */}
                 <div style={{ height: 8, background: '#f3f4f6', borderRadius: 999, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: pct >= 85 ? '#16a34a' : pct >= 65 ? '#ea580c' : '#dc2626', borderRadius: 999, transition: 'width .4s' }} />
+                  <div style={{ height: '100%', width: `${pct}%`, background: pct >= 85 ? '#16a34a' : pct >= 65 ? '#ea580c' : '#dc2626', borderRadius: 999 }} />
                 </div>
-
-                {/* Present */}
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Present</span>
                   <span style={{ fontSize: 14, fontWeight: 700, color: '#16a34a' }}>{row.present}</span>
                 </div>
-
-                {/* On Leave */}
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>On Leave</span>
                   <span style={{ fontSize: 14, fontWeight: 700, color: '#ea580c' }}>{row.onLeave}</span>
                 </div>
-
-                {/* Absent */}
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Absent</span>
                   <span style={{ fontSize: 14, fontWeight: 700, color: '#dc2626' }}>{row.absent}</span>
                 </div>
-
-                {/* Pct */}
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: pct >= 85 ? '#16a34a' : pct >= 65 ? '#ea580c' : '#dc2626' }}>{pct}%</span>
                 </div>
@@ -111,7 +94,6 @@ const AttendancePage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Trend chart */}
       <Card title="Attendance Trend — May 2025">
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={lineChartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>

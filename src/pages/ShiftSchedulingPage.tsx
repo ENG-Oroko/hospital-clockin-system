@@ -1,231 +1,307 @@
 // src/pages/ShiftSchedulingPage.tsx
-import React, { useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
-import Card       from '../components/Card'
-import PageHeader from '../components/PageHeader'
-import { shiftEntriesData, departmentsData, ShiftEntry } from '../data'
+import React, { useState, useCallback } from 'react'
+import { Plus, Clock, Edit2, Trash2 } from 'lucide-react'
+import PageHeader     from '../components/PageHeader'
+import ShiftModal     from '../components/ShiftModal'
+import ToastContainer from '../components/Toast'
+import {
+  initialShifts,
+  ALL_SHIFT_DEPTS,
+  COLOR_OPTIONS,
+  EMPTY_SHIFT_FORM,
+} from '../data/shiftsData'
+import {
+  ShiftTemplate,
+  ShiftFormValues,
+  ShiftFormErrors,
+  Toast,
+} from '../data/types'
 
-const ALL_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+let toastId = 0
 
-const shiftColors: Record<string, { bg: string; color: string }> = {
-  Morning:   { bg: '#ffedd5', color: '#ea580c' },
-  Afternoon: { bg: '#dbeafe', color: '#2563eb' },
-  Night:     { bg: '#ede9fe', color: '#7c3aed' },
+function calcDuration(start: string, end: string): string {
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  let mins = (eh * 60 + em) - (sh * 60 + sm)
+  if (mins < 0) mins += 24 * 60
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
 const ShiftSchedulingPage: React.FC = () => {
-  const [shifts, setShifts]     = useState<ShiftEntry[]>(shiftEntriesData)
-  const [showForm, setShowForm] = useState(false)
-  const [filter, setFilter]     = useState<'All' | 'Morning' | 'Afternoon' | 'Night'>('All')
+  const [shifts,    setShifts]    = useState<ShiftTemplate[]>(initialShifts)
+  const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [form,      setForm]      = useState<ShiftFormValues>(EMPTY_SHIFT_FORM)
+  const [errors,    setErrors]    = useState<ShiftFormErrors>({})
+  const [toasts,    setToasts]    = useState<Toast[]>([])
+  const [confirmId, setConfirmId] = useState<number | null>(null)
 
-  const [form, setForm] = useState({
-    name:       '',
-    department: departmentsData[0]?.name ?? '',
-    shiftType:  'Morning' as ShiftEntry['shiftType'],
-    startTime:  '06:00',
-    endTime:    '14:00',
-    days:       [] as string[],
-  })
+  /* ── Toasts ── */
+  const addToast = useCallback((message: string, type: Toast['type'] = 'info') => {
+    const id = ++toastId
+    setToasts(p => [...p, { id, message, type }])
+  }, [])
+  const removeToast = useCallback((id: number) => setToasts(p => p.filter(t => t.id !== id)), [])
 
-  const toggleDay = (day: string) =>
-    setForm(p => ({ ...p, days: p.days.includes(day) ? p.days.filter(d => d !== day) : [...p.days, day] }))
-
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault()
-    const entry: ShiftEntry = {
-      id:          Date.now(),
-      createdDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-      ...form,
-    }
-    setShifts(p => [entry, ...p])
-    setShowForm(false)
-    setForm({ name: '', department: departmentsData[0]?.name ?? '', shiftType: 'Morning', startTime: '06:00', endTime: '14:00', days: [] })
+  /* ── Modal helpers ── */
+  const openCreate = () => {
+    setForm(EMPTY_SHIFT_FORM)
+    setEditingId(null)
+    setErrors({})
+    setShowModal(true)
   }
 
-  const deleteShift = (id: number) => setShifts(p => p.filter(s => s.id !== id))
+  const openEdit = (shift: ShiftTemplate) => {
+    setForm({ name: shift.name, start: shift.start, end: shift.end, color: shift.color, bg: shift.bg, depts: [...shift.depts] })
+    setEditingId(shift.id)
+    setErrors({})
+    setShowModal(true)
+  }
 
-  const displayed = shifts.filter(s => filter === 'All' || s.shiftType === filter)
+  const closeModal = () => { setShowModal(false); setEditingId(null); setErrors({}) }
+
+  /* ── Field setter ── */
+  const setField = (key: keyof ShiftFormValues) => (value: string) =>
+    setForm(p => ({ ...p, [key]: value }))
+
+  /* ── Dept toggle ── */
+  const toggleDept = (dept: string) =>
+    setForm(p => ({
+      ...p,
+      depts: p.depts.includes(dept)
+        ? p.depts.filter(d => d !== dept)
+        : [...p.depts, dept],
+    }))
+
+  /* ── Validation ── */
+  const validate = (): boolean => {
+    const e: ShiftFormErrors = {}
+    if (!form.name.trim())      e.name  = 'Shift name is required.'
+    if (!form.start)            e.start = 'Start time is required.'
+    if (!form.end)              e.end   = 'End time is required.'
+    if (form.depts.length === 0)e.depts = 'Select at least one department.'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  /* ── Save ── */
+  const save = () => {
+    if (!validate()) return
+    if (editingId !== null) {
+      setShifts(p => p.map(s => s.id === editingId ? { ...s, ...form } : s))
+      addToast(`✓ "${form.name}" updated successfully`, 'success')
+    } else {
+      setShifts(p => [...p, { id: Date.now(), ...form }])
+      addToast(`✓ "${form.name}" created successfully`, 'success')
+    }
+    closeModal()
+  }
+
+  /* ── Delete with confirm ── */
+  const requestDelete = (id: number) => setConfirmId(id)
+  const cancelDelete  = ()           => setConfirmId(null)
+  const confirmDelete = (shift: ShiftTemplate) => {
+    setShifts(p => p.filter(s => s.id !== shift.id))
+    addToast(`"${shift.name}" deleted`, 'danger')
+    setConfirmId(null)
+  }
+
+  /* ── Summary stats ── */
+  const totalDeptCov = [...new Set(shifts.flatMap(s => s.depts))].length
+  const longestShift = shifts.reduce<{ name: string; mins: number }>(
+    (acc, s) => {
+      const [sh, sm] = s.start.split(':').map(Number)
+      const [eh, em] = s.end.split(':').map(Number)
+      let mins = (eh * 60 + em) - (sh * 60 + sm)
+      if (mins < 0) mins += 1440
+      return mins > acc.mins ? { name: s.name, mins } : acc
+    },
+    { name: '—', mins: 0 }
+  )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <PageHeader
-        title="Shift Scheduling"
-        subtitle="Create and manage shift definitions"
-        action={
-          <button
-            onClick={() => setShowForm(v => !v)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
-          >
-            <Plus size={15} /> {showForm ? 'Cancel' : 'Create Shift'}
-          </button>
-        }
-      />
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <PageHeader
+          title="Shift Scheduling"
+          subtitle="Define and manage all shift templates for the hospital"
+          action={
+            <button
+              onClick={openCreate}
+              aria-label="Create new shift"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              <Plus size={15} /> Create Shift
+            </button>
+          }
+        />
 
-      {/* Create Shift Form */}
-      {showForm && (
-        <Card title="Create New Shift">
-          <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 560 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              {/* Shift name */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Shift Name *</label>
-                <input
-                  required value={form.name}
-                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. ICU Morning Round"
-                  style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none' }}
-                />
+        {/* ── KPI strip ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 20 }}>
+          {[
+            { label: 'Total Shift Types',   value: shifts.length,                          bg: '#dbeafe', color: '#2563eb' },
+            { label: 'Departments Covered', value: `${totalDeptCov} / ${ALL_SHIFT_DEPTS.length}`, bg: '#dcfce7', color: '#16a34a' },
+            { label: 'Longest Shift',       value: longestShift.name,                      bg: '#ffedd5', color: '#ea580c' },
+          ].map(s => (
+            <div key={s.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: s.bg, color: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Clock size={20} />
               </div>
-
-              {/* Department */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Department *</label>
-                <select
-                  value={form.department}
-                  onChange={e => setForm(p => ({ ...p, department: e.target.value }))}
-                  style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, background: '#fff', outline: 'none' }}
-                >
-                  {departmentsData.map(d => <option key={d.id}>{d.name}</option>)}
-                </select>
-              </div>
-
-              {/* Shift type */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Shift Type *</label>
-                <select
-                  value={form.shiftType}
-                  onChange={e => setForm(p => ({ ...p, shiftType: e.target.value as ShiftEntry['shiftType'] }))}
-                  style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, background: '#fff', outline: 'none' }}
-                >
-                  <option>Morning</option>
-                  <option>Afternoon</option>
-                  <option>Night</option>
-                </select>
-              </div>
-
-              {/* Start / End */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Start Time *</label>
-                <input type="time" value={form.startTime} onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))} required style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>End Time *</label>
-                <input type="time" value={form.endTime} onChange={e => setForm(p => ({ ...p, endTime: e.target.value }))} required style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none' }} />
+              <div>
+                <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 2 }}>{s.label}</p>
+                <p style={{ fontSize: 20, fontWeight: 700, color: '#111827', lineHeight: 1.2 }}>{s.value}</p>
               </div>
             </div>
+          ))}
+        </div>
 
-            {/* Days */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Active Days *</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {ALL_DAYS.map(day => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleDay(day)}
+        {/* ── Shift cards ── */}
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 24 }}>
+          <div style={{ marginBottom: 20 }}>
+            <p style={{ fontSize: 17, fontWeight: 600, color: '#111827' }}>Shift Templates</p>
+            <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
+              {shifts.length} shift{shifts.length !== 1 ? 's' : ''} defined
+            </p>
+          </div>
+
+          {shifts.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
+              <Clock size={36} style={{ opacity: .25, marginBottom: 12 }} />
+              <p style={{ fontSize: 14, fontWeight: 500 }}>No shifts defined yet.</p>
+              <p style={{ fontSize: 13, marginTop: 4 }}>Click "Create Shift" to add your first template.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px,1fr))', gap: 16 }}>
+              {shifts.map(shift => {
+                const isConfirming = confirmId === shift.id
+                return (
+                  <div
+                    key={shift.id}
                     style={{
-                      width: 40, height: 40, borderRadius: '50%', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      background: form.days.includes(day) ? '#2563eb' : '#f3f4f6',
-                      color:      form.days.includes(day) ? '#fff'    : '#6b7280',
-                      border:     form.days.includes(day) ? '2px solid #2563eb' : '2px solid transparent',
+                      border:        `1.5px solid ${shift.bg === '#F3F4F6' ? '#e5e7eb' : shift.bg}`,
+                      borderRadius:  12,
+                      padding:       18,
+                      background:    '#fff',
+                      display:       'flex',
+                      flexDirection: 'column',
+                      gap:           12,
+                      transition:    'box-shadow .15s',
                     }}
+                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,.07)')}
+                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.boxShadow = 'none')}
                   >
-                    {day}
-                  </button>
-                ))}
-              </div>
-              {form.days.length === 0 && <p style={{ fontSize: 12, color: '#dc2626' }}>Select at least one day</p>}
-            </div>
+                    {/* Card top row */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div
+                          style={{
+                            width: 42, height: 42, borderRadius: 10,
+                            background: shift.bg, color: shift.color,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontWeight: 800, fontSize: 17, flexShrink: 0,
+                          }}
+                          aria-hidden="true"
+                        >
+                          {shift.name[0]}
+                        </div>
+                        <div>
+                          <p style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>{shift.name}</p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            <span style={{ fontSize: 12, color: '#6b7280' }}>
+                              {shift.start} – {shift.end}
+                            </span>
+                            <span style={{ background: shift.bg, color: shift.color, padding: '1px 7px', borderRadius: 999, fontSize: 11, fontWeight: 600 }}>
+                              {calcDuration(shift.start, shift.end)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
 
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button
-                type="submit"
-                disabled={form.days.length === 0}
-                style={{ padding: '10px 24px', background: form.days.length === 0 ? '#93c5fd' : '#2563eb', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: form.days.length === 0 ? 'not-allowed' : 'pointer' }}
-              >
-                Create Shift
-              </button>
+                      {/* Edit / Delete */}
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <button
+                          onClick={() => openEdit(shift)}
+                          aria-label={`Edit ${shift.name}`}
+                          style={{ width: 30, height: 30, borderRadius: '50%', background: '#dbeafe', color: '#2563eb', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                          onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = '#bfdbfe')}
+                          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#dbeafe')}
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
+                          onClick={() => requestDelete(shift.id)}
+                          aria-label={`Delete ${shift.name}`}
+                          style={{ width: 30, height: 30, borderRadius: '50%', background: '#fee2e2', color: '#dc2626', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                          onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = '#fecaca')}
+                          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#fee2e2')}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Inline delete confirm */}
+                    {isConfirming && (
+                      <div style={{ background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <p style={{ fontSize: 13, color: '#dc2626', fontWeight: 500 }}>
+                          Delete <strong>{shift.name}</strong>?
+                        </p>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            onClick={() => confirmDelete(shift)}
+                            style={{ padding: '5px 12px', background: '#dc2626', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                          >
+                            Yes, delete
+                          </button>
+                          <button
+                            onClick={cancelDelete}
+                            style={{ padding: '5px 12px', background: '#f5f6fa', border: '1px solid #e5e7eb', borderRadius: 6, color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Dept tags */}
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+                        Assigned Departments
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {shift.depts.map(d => (
+                          <span key={d} style={{ background: shift.bg, color: shift.color, padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 500 }}>
+                            {d}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          </form>
-        </Card>
+          )}
+        </div>
+      </div>
+
+      {showModal && (
+        <ShiftModal
+          form={form}
+          errors={errors}
+          isEdit={editingId !== null}
+          colorOptions={COLOR_OPTIONS}
+          allDepts={ALL_SHIFT_DEPTS}
+          onSet={setField}
+          onToggleDept={toggleDept}
+          onSave={save}
+          onClose={closeModal}
+        />
       )}
 
-      {/* Filter */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        {(['All', 'Morning', 'Afternoon', 'Night'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            style={{ padding: '6px 16px', borderRadius: 999, fontSize: 13, fontWeight: 500, background: filter === f ? '#2563eb' : '#fff', color: filter === f ? '#fff' : '#6b7280', border: `1px solid ${filter === f ? '#2563eb' : '#e5e7eb'}` }}>
-            {f}
-          </button>
-        ))}
-      </div>
-
-      {/* Shift cards grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-        {displayed.map(shift => {
-          const sc = shiftColors[shift.shiftType] ?? { bg: '#f3f4f6', color: '#6b7280' }
-          const dept = departmentsData.find(d => d.name === shift.department)
-
-          return (
-            <div key={shift.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
-              {/* Top stripe */}
-              <div style={{ height: 4, background: dept?.color ?? sc.color }} />
-
-              <div style={{ padding: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                  <div>
-                    <span style={{ background: sc.bg, color: sc.color, fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 999 }}>{shift.shiftType}</span>
-                    <p style={{ fontSize: 15, fontWeight: 700, color: '#111827', marginTop: 6 }}>{shift.name}</p>
-                    <p style={{ fontSize: 13, color: '#6b7280' }}>{shift.department}</p>
-                  </div>
-                  <button
-                    onClick={() => deleteShift(shift.id)}
-                    aria-label={`Delete ${shift.name}`}
-                    style={{ color: '#fca5a5', display: 'flex', padding: 4, borderRadius: 6 }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#dc2626'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#fca5a5'}
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-
-                {/* Time */}
-                <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-                  <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 14px', flex: 1, textAlign: 'center' }}>
-                    <p style={{ fontSize: 11, color: '#9ca3af' }}>Start</p>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>{shift.startTime}</p>
-                  </div>
-                  <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 14px', flex: 1, textAlign: 'center' }}>
-                    <p style={{ fontSize: 11, color: '#9ca3af' }}>End</p>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>{shift.endTime}</p>
-                  </div>
-                </div>
-
-                {/* Days */}
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                  {ALL_DAYS.map(day => (
-                    <span
-                      key={day}
-                      style={{
-                        width: 32, height: 32, borderRadius: '50%',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 11, fontWeight: 600,
-                        background: shift.days.includes(day) ? sc.bg    : '#f3f4f6',
-                        color:      shift.days.includes(day) ? sc.color : '#d1d5db',
-                      }}
-                    >
-                      {day}
-                    </span>
-                  ))}
-                </div>
-
-                <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 12 }}>Created {shift.createdDate}</p>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+    </>
   )
 }
 

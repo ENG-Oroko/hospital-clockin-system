@@ -4,8 +4,8 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Calendar, Clock, Bell,
   Settings, LogOut, HelpCircle, ChevronDown, ChevronRight,
-  Activity, FileText, UserCheck, Heart, Building2, DollarSign,
-  MessageCircle,
+  Activity, FileText, UserCheck,  Building2, DollarSign,
+  MessageCircle, Cpu,   
 } from 'lucide-react'
 import { navItems } from '../data'
 
@@ -20,6 +20,7 @@ const ICONS: Record<string, React.ReactElement> = {
   DollarSign:      <DollarSign      size={20} />,
   FileText:        <FileText        size={20} />,
   Bell:            <Bell            size={20} />,
+  Cpu:             <Cpu             size={20} />,
   Settings:        <Settings        size={20} />,
 }
 
@@ -27,7 +28,7 @@ interface Props { collapsed: boolean; onToggle: () => void }
 
 const Sidebar: React.FC<Props> = ({ collapsed, onToggle }) => {
   const location = useLocation()
-  const [expanded, setExpanded] = useState<string[]>(['Employees', 'Departments'])
+  const [expanded, setExpanded] = useState<string[]>([]) // which parent items are expanded
 
   const toggle = (label: string) =>
     setExpanded(p =>
@@ -73,7 +74,7 @@ const Sidebar: React.FC<Props> = ({ collapsed, onToggle }) => {
             flexShrink:     0,
           }}
         >
-          <Heart size={18} color="#fff" />
+          <Activity  size={20} color="#fff" />
         </div>
 
         {!collapsed && (
@@ -81,14 +82,14 @@ const Sidebar: React.FC<Props> = ({ collapsed, onToggle }) => {
             style={{
               color:      '#fff',
               fontWeight: 700,
-              fontSize:   17,
+              fontSize:   15,
               whiteSpace: 'nowrap',
             }}
           >
             CityCare
           </span>
         )}
-
+         
         <button
           onClick={onToggle}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -122,7 +123,7 @@ const Sidebar: React.FC<Props> = ({ collapsed, onToggle }) => {
             flexShrink:    0,
           }}
         >
-          Hospital Admin
+          Main menu
         </div>
       )}
 

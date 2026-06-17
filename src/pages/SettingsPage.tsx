@@ -1,138 +1,305 @@
 // src/pages/SettingsPage.tsx
-import React, { useState } from 'react'
-import { User, Bell, Shield, Monitor } from 'lucide-react'
-import Card       from '../components/Card'
-import PageHeader from '../components/PageHeader'
-import { notificationSettings, systemSettings, SettingToggle } from '../data'
+import React, { useState, useCallback } from 'react'
+import { Save, Clock, DollarSign, Bell, Shield } from 'lucide-react'
+import PageHeader     from '../components/PageHeader'
+import ToastContainer from '../components/Toast'
+import { defaultSettings, TIMEZONE_OPTIONS } from '../data/settingsData'
+import { HospitalSettings, Toast } from '../data/types'
 
-/* Toggle switch component */
-const Toggle: React.FC<{ enabled: boolean; onToggle: () => void; label: string }> = ({ enabled, onToggle, label }) => (
-  <button
-    role="switch"
-    aria-checked={enabled}
-    aria-label={label}
-    onClick={onToggle}
+let toastId = 0
+
+/* ── Reusable toggle switch ── */
+const Toggle: React.FC<{
+  id:       string
+  label:    string
+  value:    boolean
+  onChange: (v: boolean) => void
+}> = ({ id, label, value, onChange }) => (
+  <div
     style={{
-      width: 44, height: 24, borderRadius: 999, padding: 2,
-      background: enabled ? '#2563eb' : '#e5e7eb',
-      border: 'none', cursor: 'pointer',
-      display: 'flex', alignItems: 'center',
-      justifyContent: enabled ? 'flex-end' : 'flex-start',
-      transition: 'background .2s',
-      flexShrink: 0,
+      display:        'flex',
+      alignItems:     'center',
+      justifyContent: 'space-between',
+      padding:        '12px 0',
+      borderBottom:   '1px solid #f3f4f6',
     }}
   >
-    <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', display: 'block', boxShadow: '0 1px 3px rgba(0,0,0,.2)', transition: 'all .2s' }} />
-  </button>
+    <label htmlFor={id} style={{ fontSize: 14, color: '#111827', cursor: 'pointer' }}>
+      {label}
+    </label>
+    <button
+      id={id}
+      role="switch"
+      aria-checked={value}
+      aria-label={label}
+      onClick={() => onChange(!value)}
+      style={{
+        width:      44,
+        height:     24,
+        borderRadius: 12,
+        border:     'none',
+        cursor:     'pointer',
+        background: value ? '#2563eb' : '#e5e7eb',
+        position:   'relative',
+        transition: 'background .2s',
+        padding:    0,
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          width:        18,
+          height:       18,
+          borderRadius: '50%',
+          background:   '#fff',
+          position:     'absolute',
+          top:          3,
+          left:         value ? 23 : 3,
+          transition:   'left .2s',
+          boxShadow:    '0 1px 3px rgba(0,0,0,.2)',
+        }}
+      />
+    </button>
+  </div>
 )
 
-/* Reusable settings section */
-const SettingsSection: React.FC<{
-  title: string
-  icon: React.ReactElement
-  items: SettingToggle[]
-  onToggle: (i: number) => void
-}> = ({ title, icon, items, onToggle }) => (
-  <Card title={title} action={icon}>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      {items.map((s, i) => (
-        <div key={s.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: i < items.length - 1 ? '1px solid #e5e7eb' : 'none', gap: 16 }}>
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{s.label}</p>
-            <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>{s.description}</p>
-          </div>
-          <Toggle enabled={s.enabled} onToggle={() => onToggle(i)} label={s.label} />
-        </div>
-      ))}
+/* ── Reusable text / number field ── */
+const Field: React.FC<{
+  label:    string
+  value:    string
+  onChange: (v: string) => void
+  type?:    string
+  min?:     string
+  max?:     string
+  step?:    string
+  suffix?:  string
+}> = ({ label, value, onChange, type = 'text', min, max, step, suffix }) => (
+  <div style={{ marginBottom: 16 }}>
+    <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#6b7280', marginBottom: 6 }}>
+      {label}
+    </label>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        min={min}
+        max={max}
+        step={step}
+        style={{
+          flex:         1,
+          padding:      '9px 12px',
+          border:       '1px solid #e5e7eb',
+          borderRadius: 8,
+          fontSize:     14,
+          fontFamily:   'inherit',
+          outline:      'none',
+          background:   '#fff',
+        }}
+      />
+      {suffix && (
+        <span style={{ fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>
+          {suffix}
+        </span>
+      )}
     </div>
-  </Card>
+  </div>
+)
+
+/* ── Section card wrapper ── */
+const Section: React.FC<{
+  title:    string
+  iconBg:   string
+  iconColor:string
+  icon:     React.ReactNode
+  children: React.ReactNode
+  btnLabel: string
+  btnColor: string
+  onSave:   () => void
+}> = ({ title, iconBg, iconColor, icon, children, btnLabel, btnColor, onSave }) => (
+  <div
+    style={{
+      background:   '#fff',
+      border:       '1px solid #e5e7eb',
+      borderRadius: 12,
+      padding:      24,
+      display:      'flex',
+      flexDirection:'column',
+      gap:          0,
+    }}
+  >
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+      <div
+        style={{
+          width:          36,
+          height:         36,
+          borderRadius:   10,
+          background:     iconBg,
+          color:          iconColor,
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: 'center',
+          flexShrink:     0,
+        }}
+        aria-hidden="true"
+      >
+        {icon}
+      </div>
+      <p style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>{title}</p>
+    </div>
+
+    {children}
+
+    <button
+      onClick={onSave}
+      style={{
+        display:      'flex',
+        alignItems:   'center',
+        gap:          6,
+        padding:      '9px 16px',
+        background:   btnColor,
+        border:       'none',
+        borderRadius: 8,
+        color:        '#fff',
+        fontSize:     13,
+        fontWeight:   600,
+        cursor:       'pointer',
+        fontFamily:   'inherit',
+        width:        'fit-content',
+        marginTop:    16,
+      }}
+    >
+      <Save size={14} /> {btnLabel}
+    </button>
+  </div>
 )
 
 const SettingsPage: React.FC = () => {
-  const [notifSettings, setNotifSettings] = useState<SettingToggle[]>(notificationSettings)
-  const [sysSettings,   setSysSettings]   = useState<SettingToggle[]>(systemSettings)
-  const [saved, setSaved] = useState(false)
+  const [settings, setSettings] = useState<HospitalSettings>(defaultSettings)
+  const [toasts,   setToasts]   = useState<Toast[]>([])
 
-  const toggleNotif = (i: number) =>
-    setNotifSettings(p => p.map((s, idx) => idx === i ? { ...s, enabled: !s.enabled } : s))
+  const addToast = useCallback((message: string, type: Toast['type'] = 'info') => {
+    const id = ++toastId
+    setToasts(p => [...p, { id, message, type }])
+  }, [])
+  const removeToast = useCallback((id: number) => setToasts(p => p.filter(t => t.id !== id)), [])
 
-  const toggleSys = (i: number) =>
-    setSysSettings(p => p.map((s, idx) => idx === i ? { ...s, enabled: !s.enabled } : s))
+  const set = <K extends keyof HospitalSettings>(key: K) =>
+    (value: HospitalSettings[K]) =>
+      setSettings(p => ({ ...p, [key]: value }))
 
-  const handleSave = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
+  const otRate = parseFloat(settings.otMultiplier || '1') || 1
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <PageHeader
-        title="Settings"
-        subtitle="Manage your dashboard preferences"
-        action={
-          <button
-            onClick={handleSave}
-            style={{
-              padding: '8px 20px',
-              background: saved ? '#16a34a' : '#2563eb',
-              color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 600,
-              cursor: 'pointer', transition: 'background .2s',
-            }}
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <PageHeader title="Settings" subtitle="Configure hospital operations and system preferences" />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+
+          {/* ── Hospital Profile ── */}
+          <Section
+            title="Hospital Profile"
+            iconBg="#dbeafe" iconColor="#2563eb"
+            icon={<Shield size={18} />}
+            btnLabel="Save Profile" btnColor="#2563eb"
+            onSave={() => addToast('✓ Hospital profile saved', 'success')}
           >
-            {saved ? '✓ Saved!' : 'Save Changes'}
-          </button>
-        }
-      />
-
-      {/* Profile */}
-      <Card title="Profile" action={<User size={18} color="#6b7280" />}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          {[
-            { label: 'Full Name',    value: 'Dr. A. Mehta',          type: 'text'  },
-            { label: 'Role',         value: 'Administrator',          type: 'text'  },
-            { label: 'Email',        value: 'a.mehta@citycare.in',    type: 'email' },
-            { label: 'Phone',        value: '+91 98000 00001',        type: 'tel'   },
-          ].map(f => (
-            <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>{f.label}</label>
-              <input
-                type={f.type}
-                defaultValue={f.value}
-                style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, color: '#111827', outline: 'none' }}
-              />
+            <Field
+              label="Hospital Name"
+              value={settings.hospitalName}
+              onChange={set('hospitalName')}
+            />
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#6b7280', marginBottom: 6 }}>
+                Timezone
+              </label>
+              <select
+                value={settings.timezone}
+                onChange={e => set('timezone')(e.target.value)}
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff', cursor: 'pointer' }}
+              >
+                {TIMEZONE_OPTIONS.map(t => <option key={t}>{t}</option>)}
+              </select>
             </div>
-          ))}
+          </Section>
+
+          {/* ── Attendance Rules ── */}
+          <Section
+            title="Attendance Rules"
+            iconBg="#ffedd5" iconColor="#ea580c"
+            icon={<Clock size={18} />}
+            btnLabel="Save Rules" btnColor="#ea580c"
+            onSave={() => addToast('✓ Attendance rules saved', 'success')}
+          >
+            <Field
+              label="Grace Period (Lateness Margin)"
+              value={settings.gracePeriod}
+              onChange={set('gracePeriod')}
+              type="number" min="0" max="60" suffix="minutes"
+            />
+            <Field
+              label="Standard Working Hours per Shift"
+              value={settings.workHours}
+              onChange={set('workHours')}
+              type="number" min="4" max="16" suffix="hours"
+            />
+          </Section>
+
+          {/* ── Payroll Policy ── */}
+          <Section
+            title="Payroll Policy"
+            iconBg="#dcfce7" iconColor="#16a34a"
+            icon={<DollarSign size={18} />}
+            btnLabel="Save Policy" btnColor="#16a34a"
+            onSave={() => addToast('✓ Payroll policy saved', 'success')}
+          >
+            <Field
+              label="Overtime Rate Multiplier"
+              value={settings.otMultiplier}
+              onChange={set('otMultiplier')}
+              type="number" min="1" max="3" step="0.1" suffix="× base rate"
+            />
+            <div
+              style={{
+                padding:      '12px 14px',
+                background:   '#f9fafb',
+                borderRadius: 8,
+                marginBottom: 4,
+                fontSize:     13,
+                color:        '#6b7280',
+                lineHeight:   1.6,
+              }}
+            >
+              Example: staff earning{' '}
+              <strong style={{ color: '#111827' }}>KSH 2,000/hr</strong> at{' '}
+              <strong style={{ color: '#111827' }}>{settings.otMultiplier}×</strong> earns{' '}
+              <strong style={{ color: '#16a34a' }}>
+                KSH {(2000 * otRate).toLocaleString(undefined, { minimumFractionDigits: 2 })}/hr
+              </strong>{' '}
+              for overtime.
+            </div>
+          </Section>
+
+          {/* ── Notification Preferences ── */}
+          <Section
+            title="Notification Preferences"
+            iconBg="#fee2e2" iconColor="#dc2626"
+            icon={<Bell size={18} />}
+            btnLabel="Save Preferences" btnColor="#dc2626"
+            onSave={() => addToast('✓ Notification preferences saved', 'success')}
+          >
+            <Toggle id="email-alerts"  label="Email Alerts for Absences"          value={settings.emailAlerts}  onChange={set('emailAlerts')}  />
+            <Toggle id="sms-alerts"    label="SMS Alerts to Managers"              value={settings.smsAlerts}    onChange={set('smsAlerts')}    />
+            <Toggle id="device-alerts" label="Device Offline Notifications"        value={settings.deviceAlerts} onChange={set('deviceAlerts')} />
+            <Toggle id="auto-recon"    label="Automatic Nightly Reconciliation"    value={settings.autoRecon}    onChange={set('autoRecon')}    />
+          </Section>
+
         </div>
-      </Card>
+      </div>
 
-      {/* Notification settings */}
-      <SettingsSection
-        title="Notification Preferences"
-        icon={<Bell size={18} color="#6b7280" />}
-        items={notifSettings}
-        onToggle={toggleNotif}
-      />
-
-      {/* System settings */}
-      <SettingsSection
-        title="System Preferences"
-        icon={<Monitor size={18} color="#6b7280" />}
-        items={sysSettings}
-        onToggle={toggleSys}
-      />
-
-      {/* Security */}
-      <Card title="Security" action={<Shield size={18} color="#6b7280" />}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <button style={{ width: 'fit-content', padding: '8px 20px', background: '#f5f6fa', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, color: '#111827', cursor: 'pointer' }}>
-            Change Password
-          </button>
-          <button style={{ width: 'fit-content', padding: '8px 20px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 14, color: '#dc2626', cursor: 'pointer' }}>
-            Revoke All Sessions
-          </button>
-        </div>
-      </Card>
-    </div>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+    </>
   )
 }
 

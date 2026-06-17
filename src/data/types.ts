@@ -85,12 +85,31 @@ export interface Employee {
 }
 
 // ── Department ───────────────────────────────────────────
-export interface Department {
-  id:          number
-  name:        string
-  headId:      number | null   // employee id of dept head
-  color:       string
-  description: string
+export interface StaffMember {
+  id:   string
+  name: string
+  dept: string
+}
+
+export interface DepartmentRecord {
+  id:       number
+  name:     string
+  headId:   string
+  costCode: string
+  floor:    string
+}
+
+export interface DeptFormValues {
+  name:     string
+  headId:   string
+  costCode: string
+  floor:    string
+}
+
+export interface DeptFormErrors {
+  name?:     string
+  headId?:   string
+  costCode?: string
 }
 
 // ── Leave ─────────────────────────────────────────────────
@@ -159,4 +178,84 @@ export interface PayrollRecord {
   overtime:    number   // KSH
   deductions:  number   // KSH
   net:         number   // KSH
+}
+
+// Add to src/data/types.ts  (append at the bottom)
+
+export type DeviceStatus = 'online' | 'offline'
+
+export interface Device {
+  id:       string
+  name:     string
+  location: string
+  status:   DeviceStatus
+  lastSeen: string
+  firmware: string
+  ip:       string
+}
+
+export interface Toast {
+  id:      number
+  message: string
+  type:    'info' | 'success' | 'warning' | 'danger'
+}
+// src/data/types.ts  — append these at the bottom
+
+// ── Shift templates ───────────────────────────────────────
+export interface ShiftTemplate {
+  id:    number
+  name:  string
+  start: string
+  end:   string
+  color: string
+  bg:    string
+  depts: string[]
+}
+
+export interface ShiftFormValues {
+  name:  string
+  start: string
+  end:   string
+  color: string
+  bg:    string
+  depts: string[]
+}
+
+export interface ShiftFormErrors {
+  name?:  string
+  start?: string
+  end?:   string
+  depts?: string
+}
+
+// ── Notifications ─────────────────────────────────────────
+export type NotifColor = 'red' | 'amber' | 'blue' | 'green'
+export type NotifIcon  =
+  | 'AlertCircle'
+  | 'AlertTriangle'
+  | 'XCircle'
+  | 'Info'
+  | 'CheckCircle'
+
+export interface AppNotification {
+  id:    number
+  icon:  NotifIcon
+  color: NotifColor
+  title: string
+  desc:  string
+  time:  string
+  read:  boolean
+}
+
+// ── Settings ──────────────────────────────────────────────
+export interface HospitalSettings {
+  hospitalName: string
+  timezone:     string
+  gracePeriod:  string
+  workHours:    string
+  otMultiplier: string
+  emailAlerts:  boolean
+  smsAlerts:    boolean
+  deviceAlerts: boolean
+  autoRecon:    boolean
 }

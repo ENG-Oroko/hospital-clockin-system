@@ -37,5 +37,14 @@ export const kpiData: KPIStat[] = [
     iconName:  'UserX',
     colorBg:   '#fee2e2',
     colorIcon: '#dc2626',
-  }
+  },
+  {
+    label: 'Total Overtime',
+    value: '342',
+    delta: '↑ hrs this month',
+    deltaType: 'neutral',
+    iconName: 'Clock',
+    colorBg:   '#dbeafe',
+    colorIcon: '#2563eb',
+  },
 ]

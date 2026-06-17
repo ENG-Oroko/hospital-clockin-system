@@ -5,19 +5,11 @@ export const navItems: NavItem[] = [
   { iconName: 'LayoutDashboard', label: 'Dashboard',       path: '/'               },
   {
     iconName: 'Users',
-    label:    'Employees',
-    path:     '/employees',
+    label: 'Department',
+    path: '/departments',
     children: [
-      { label: 'View by Department', path: '/employees/by-department' },
-    ],
-  },
-  {
-    iconName: 'Building2',
-    label:    'Departments',
-    path:     '/departments',
-    children: [
-      { label: 'All Departments',   path: '/departments/all'    },
-      { label: 'Create Department', path: '/departments/create' },
+      { label: 'Departments', path: '/departments' },
+      { label: 'employees', path: '/employees' },
     ],
   },
   { iconName: 'UserCheck', label: 'Attendance',       path: '/attendance'  },
@@ -26,6 +18,7 @@ export const navItems: NavItem[] = [
   { iconName: 'DollarSign',label: 'Payroll',           path: '/payroll'     },
   { iconName: 'FileText',  label: 'Reports',           path: '/reports'     },
   { iconName: 'Bell',      label: 'Notifications',     path: '/notifications', badge: 5 },
+  { iconName: 'Cpu', label: 'Devices',                  path: '/devices'    },
   { iconName: 'Settings',  label: 'Settings',          path: '/settings'    },
 ]
 
