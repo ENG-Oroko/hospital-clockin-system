@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Design tokens — single source of truth for the CityCare design system.
+   Every color, spacing, and radius value used across dashboard modules
+   should trace back to one of these so all modules share one visual language.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --color-info-bg: #DBEAFE;
+  --color-info: #2563EB;
+  --color-success-bg: #DCFCE7;
+  --color-success: #16A34A;
+  --color-warning-bg: #FFEDD5;
+  --color-warning: #EA580C;
+  --color-danger-bg: #FEE2E2;
+  --color-danger: #DC2626;
+
+  --color-bg-page: #F5F6FA;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-sidebar: #0F1B3D;
+  --color-border: #E5E7EB;
+  --color-text-primary: #111827;
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #9CA3AF;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --radius-card: 12px;
+  --radius-badge: 8px;
+  --radius-pill: 999px;
+
+  --text-display: 24px;
+  --text-heading: 17px;
+  --text-stat: 30px;
+  --text-body: 14px;
+  --text-label: 13px;
+}
+
+@keyframes pulse-slide {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  50%  { opacity: 1; }
+  100% { transform: translateX(300%); opacity: 0; }
+}
+
+html, body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: #F5F6FA;
+  color: #111827;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
+}
+
+@media print {
+  aside, header { display: none !important; }
+  main { margin-left: 0 !important; padding: 0 !important; }
+  body { background: white !important; }
+}
